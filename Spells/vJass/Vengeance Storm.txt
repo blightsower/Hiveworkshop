@@ -90,6 +90,17 @@ scope VengeanceStorm
         readonly static string SLASH_RANGE_MODEL = "UI\\Feedback\\SelectionCircleEnemy\\SelectionCircleEnemy.mdx"
 
         //-------------------------------------------------------------
+        // WEAPON_MODEL - the model attached to the caster while casting the spell it
+        // will disappear as soon as the circle appears
+        //-------------------------------------------------------------
+        readonly static string WEAPON_MODEL = "Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile_mini.mdl"
+
+        //-------------------------------------------------------------
+        // WEAPON_ATTACHMENT - attachment point of WEAPON_MODEL
+        //-------------------------------------------------------------         
+        readonly static string WEAPON_ATTACHMENT = "weapon"
+
+        //-------------------------------------------------------------
         // SLASH_RANGE_HEIGHT - value is used to raise or lower the range indicator
         //-------------------------------------------------------------
         readonly static real SLASH_RANGE_HEIGHT = -90.
@@ -610,6 +621,7 @@ scope VengeanceStorm
         private real slashTimeLeft
         private string stage
         private effect range
+        private effect weapon
         private real aoe
         private real damage
         private VengeanceSlash slash
@@ -677,6 +689,9 @@ scope VengeanceStorm
                         set .range = AddSpecialEffect(SLASH_RANGE_MODEL, .targetX, .targetY)
                         call BlzSetSpecialEffectScale(.range, getSlashRangeSize(.level))
                         call BlzSetSpecialEffectZ(.range, adjustSfxZ(.targetX, .targetY, SLASH_RANGE_HEIGHT))
+
+                        call DestroyEffect(.weapon)
+
                         if CAN_DESTROY_TREES then
                             call clearTrees(.targetX, .targetY, .aoe)
                         endif
@@ -734,7 +749,7 @@ scope VengeanceStorm
                 set thistype(0).prev.next = this
                 set thistype(0).prev = this
               
-		set .caster = GetTriggerUnit()
+                set .caster = GetTriggerUnit()
                 set .owner = GetTriggerPlayer()
                 set .level = GetUnitAbilityLevel(.caster, VENGEANCE_STORM_ID)
                 set .targetX = GetSpellTargetX()
@@ -744,7 +759,7 @@ scope VengeanceStorm
                 set .slashTimeLeft = getInitialSlashDelay(.level)
                 set .slashesLeft = getStormCount(this.level)
                 set .stage = .STAGE_INITIAL 
-                
+                set .weapon = AddSpecialEffectTarget(WEAPON_MODEL, .caster, WEAPON_ATTACHMENT)
                 set index = index + 1
                 if index == 1 then
                     call TimerStart(vengeanceTimer, TIMER_SPEED, true, function thistype.onEffect)
