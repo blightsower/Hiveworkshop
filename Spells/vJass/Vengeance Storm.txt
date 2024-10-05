@@ -1,6 +1,6 @@
 scope VengeanceStorm
     //---------------------------------------------------------------------
-    // Vengeance Storm v1.0
+    // Vengeance Storm v1.1
     // Author: Blightsower
     //
     // Description:
@@ -90,6 +90,11 @@ scope VengeanceStorm
         readonly static string SLASH_RANGE_MODEL = "UI\\Feedback\\SelectionCircleEnemy\\SelectionCircleEnemy.mdx"
 
         //-------------------------------------------------------------
+        // SLASH_RANGE_HEIGHT - value is used to raise or lower the range indicator
+        //-------------------------------------------------------------
+        readonly static real SLASH_RANGE_HEIGHT = -90.
+
+        //-------------------------------------------------------------
         // getSlashRangeSize - returns the size of the 
         // area of effect indicator. Use the parameter "level" to derive
         // your desired value if the size of the area of effect is not the
@@ -122,7 +127,7 @@ scope VengeanceStorm
         // damage to every enemy within the target area. Original value is 6
         //-------------------------------------------------------------
         static method getStormCount takes integer level returns integer
-            return 6
+            return 2 + (level)
         endmethod
 
         //-------------------------------------------------------------
@@ -396,13 +401,13 @@ scope VengeanceStorm
 
         // a modified version of PolarProjectionBJ(Location, Dist, Angle) to
         // mutate x by scatterRadius towards a random angle
-        private method generateRandomX takes real x returns real
+        method generateRandomX takes real x returns real
             return x + GetRandomReal(0, scatterRadius) * Cos(GetRandomDirectionDeg())
         endmethod
 
         // a modified version of PolarProjectionBJ(Location, Dist, Angle) to
         // mutate y by scatterRadius towards a random angle
-        private method generateRandomY takes real y returns real
+        method generateRandomY takes real y returns real
             return y + GetRandomReal(0, scatterRadius) * Sin(GetRandomDirectionDeg())
         endmethod
 
@@ -457,7 +462,7 @@ scope VengeanceStorm
         private boolean hasDamage = false  // only true for the first slash of the batch
         private effect slash
 
-        static method preload takes boolean b returns nothing
+        private static method preload takes boolean b returns nothing
             local unit p = null
             if not(b) then
                 return
@@ -483,7 +488,7 @@ scope VengeanceStorm
             return .t > 1
         endmethod
 
-        method clear takes nothing returns nothing
+        private method clear takes nothing returns nothing
             local unit u = null
             call this.deallocate()
             
@@ -521,7 +526,7 @@ scope VengeanceStorm
             
         endmethod
 
-        static method onEffect takes nothing returns nothing
+        private static method onEffect takes nothing returns nothing
             local thistype this = thistype(0).next
             loop
                 exitwhen this==0
@@ -575,7 +580,7 @@ scope VengeanceStorm
         endmethod
 
         // preload and dummy caster set up
-        static method onInit takes nothing returns nothing
+        private static method onInit takes nothing returns nothing
             call .preload(.PRELOAD)
             call loadCaster(CAN_MINISTUN)
         endmethod
@@ -609,14 +614,22 @@ scope VengeanceStorm
         private real damage
         private VengeanceSlash slash
 
-        static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
+        private static method adjustSfxZ takes real x, real y, real z returns real
+            local location l = Location(x, y)
+            set z = GetLocationZ(l) + z
+            call RemoveLocation(l)
+            return z
+        endmethod
+
+
+        private static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
             local real damage_agi = I2R(GetHeroStatBJ(bj_HEROSTAT_AGI, u, true)) * a
             local real damage_str = I2R(GetHeroStatBJ(bj_HEROSTAT_STR, u, true)) * s
             local real damage_int = I2R(GetHeroStatBJ(bj_HEROSTAT_INT, u, true)) * i
             return damage_agi + damage_str + damage_int
         endmethod
 
-        static method preload takes boolean b returns nothing
+        private static method preload takes boolean b returns nothing
             local unit p = null
             if not(b) then
                 return
@@ -630,7 +643,7 @@ scope VengeanceStorm
             set p = null
         endmethod
 
-        method clear takes nothing returns nothing
+        private method clear takes nothing returns nothing
             call this.deallocate()
 
             call BlzSetSpecialEffectScale(.range, 0.001)
@@ -645,7 +658,7 @@ scope VengeanceStorm
             endif
         endmethod
 
-        static method onEffect takes nothing returns nothing
+        private static method onEffect takes nothing returns nothing
 
             local integer i
             local boolean hasDamage
@@ -663,7 +676,7 @@ scope VengeanceStorm
                         // range indicator
                         set .range = AddSpecialEffect(SLASH_RANGE_MODEL, .targetX, .targetY)
                         call BlzSetSpecialEffectScale(.range, getSlashRangeSize(.level))
-
+                        call BlzSetSpecialEffectZ(.range, adjustSfxZ(.targetX, .targetY, SLASH_RANGE_HEIGHT))
                         if CAN_DESTROY_TREES then
                             call clearTrees(.targetX, .targetY, .aoe)
                         endif
@@ -711,7 +724,7 @@ scope VengeanceStorm
             endloop
         endmethod
 
-        static method onCast takes nothing returns nothing
+        private static method onCast takes nothing returns nothing
             local thistype this
             if GetSpellAbilityId() == VENGEANCE_STORM_ID  then
                 
