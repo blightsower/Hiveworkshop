@@ -1,0 +1,783 @@
+scope VengeanceStorm
+    //---------------------------------------------------------------------
+    // Vengeance Storm v1.1
+    // Author: Blightsower
+    //
+    // Description:
+    //     The Blademaster swings with wrathful force. After a brief pause, 
+    // a savage storm of slashes erupts, ripping through everything in its 
+    // path.
+    //
+    // Requirements:
+    //  * Enable JassHelper
+    //
+    // How to enable JassHelper
+    //  * In the Trigger Editor window, look for the menu labeled JassHelper
+    //    and click Enable JassHelper
+    //---------------------------------------------------------------------
+    // How to Import:
+    // 1. Copy and paste the objects from this map to your map namely: 
+    //    * Vengeance Storm
+    //    * Vengeance Storm - (Ministun)
+    //    * Dummy - (Vengeance Storm)
+    // 2. Copy and paste the Vengeance Storm Script into your map
+    // 3. Configure the spell so that everything points to the correct 
+    //    variables. Additional information about the variables are 
+    //    provided for clarity.
+    //---------------------------------------------------------------------
+
+    //-------------------------------------------------------------
+    // CONFIGURATION
+    //-------------------------------------------------------------
+    globals
+        //-------------------------------------------------------------
+        // Hint:
+        // Press ctrl + d while the Object Editor is open
+        // to reveal the object ids. 
+        //-------------------------------------------------------------
+
+        //-------------------------------------------------------------
+        // HARVESTER_TYPE - the id of the unittype of the dummy used for 
+        // checking trees. It should point to the id of Dummy - (Vengeance Storm)
+        //-------------------------------------------------------------
+        private constant integer HARVESTER_TYPE = 'h000'
+
+        //-------------------------------------------------------------
+        // HARVESTER_ORDER - the order used by the dummy for checking trees. 
+        // Original value is 852018 (Peasant Harvest). 
+        //-------------------------------------------------------------
+        private constant integer HARVESTER_ORDER = 852018
+
+        //-------------------------------------------------------------
+        // CASTER_TYPE - the id of the unittype of the dummy that will be 
+        // casting the ministun. It should point to the id of Dummy - (Vengeance Storm)
+        //-------------------------------------------------------------
+        private constant integer CASTER_TYPE = 'h000'
+
+        //-------------------------------------------------------------
+        // CASTER_ORDER - the order used by the dummy when casting the ministun. 
+        // Original value is 852095 (Stormbolt). 
+        //-------------------------------------------------------------
+        private constant integer CASTER_ORDER = 852095
+
+        //-------------------------------------------------------------
+        // CASTER_ABILITY - the ability id of the ability used by the 
+        // dummy to cast the ministun. It should point to the id of 
+        // Vengeance Storm - (Ministun)
+        //-------------------------------------------------------------
+        private constant integer CASTER_ABILITY = 'A001'
+
+        //-------------------------------------------------------------
+        // TIMER_SPEED - the interval used by the timers of the spell
+        // Original value is .03
+        //------------------------------------------------------------- 
+        private constant real TIMER_SPEED = .03
+    endglobals
+
+    module VengeanceStormConfiguration
+        //-------------------------------------------------------------
+        // VENGEANCE_STORM_ID - the ability id of the ability used by the 
+        // main ability of the spell. It should point to the id of 
+        // Vengeance Storm
+        //-------------------------------------------------------------
+        readonly static integer VENGEANCE_STORM_ID = 'A000'
+
+        //-------------------------------------------------------------
+        // SLASH_RANGE_MODEL - the model used by the area of effect indicator
+        // of the spell. Its original size is rather small, so you will most
+        // likely need to configure the scale of it.
+        //-------------------------------------------------------------
+        readonly static string SLASH_RANGE_MODEL = "UI\\Feedback\\SelectionCircleEnemy\\SelectionCircleEnemy.mdx"
+
+        //-------------------------------------------------------------
+        // WEAPON_MODEL - the model attached to the caster while casting the spell it
+        // will disappear as soon as the circle appears
+        //-------------------------------------------------------------
+        readonly static string WEAPON_MODEL = "Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile_mini.mdl"
+
+        //-------------------------------------------------------------
+        // WEAPON_ATTACHMENT - attachment point of WEAPON_MODEL
+        //-------------------------------------------------------------         
+        readonly static string WEAPON_ATTACHMENT = "weapon"
+
+        //-------------------------------------------------------------
+        // SLASH_RANGE_HEIGHT - value is used to raise or lower the range indicator
+        //-------------------------------------------------------------
+        readonly static real SLASH_RANGE_HEIGHT = -90.
+
+        //-------------------------------------------------------------
+        // getSlashRangeSize - returns the size of the 
+        // area of effect indicator. Use the parameter "level" to derive
+        // your desired value if the size of the area of effect is not the
+        // same per level. Original value is 8
+        //-------------------------------------------------------------
+        static method getSlashRangeSize takes integer level returns real
+            return 8.
+        endmethod
+
+        //-------------------------------------------------------------
+        // getAoe - returns the size of the area of effect. If you are using 
+        // a base spell with area of effect indicator, such as silence. It should
+        // match this value for consistency. Use the parameter "level" to derive your 
+        // desired value. Original value is 300.
+        //-------------------------------------------------------------
+        static method getAoe takes integer level returns real 
+            return 300.
+        endmethod
+
+        //-------------------------------------------------------------
+        // getInitialSlashDelay - returns the delay before the spell
+        // starts its effect. Original value is .6
+        //-------------------------------------------------------------
+        static method getInitialSlashDelay takes integer level returns real
+            return .6
+        endmethod
+
+        //-------------------------------------------------------------
+        // getStormCount - returns the number of times the spell will deal
+        // damage to every enemy within the target area. Original value is 6
+        //-------------------------------------------------------------
+        static method getStormCount takes integer level returns integer
+            return 2 + (level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // getSlashesPerStorm - returns the number of slashes that will appear
+        // in the target area. Purely visual. Original value is 8
+        //-------------------------------------------------------------
+        static method getSlashesPerStorm takes integer level returns integer
+            return 8
+        endmethod
+
+        //-------------------------------------------------------------
+        // getDelayPerStorm - returns the delay before the subsequent slashes
+        // are spawned after the initial slash. Original value .35
+        //-------------------------------------------------------------
+        static method getDelayPerStorm takes integer level returns real
+            return .35
+        endmethod
+
+        //-------------------------------------------------------------
+        // getAbsoluteDamage - returns the base damage of the spell.
+        // Original value is 25. + (10*level)
+        //-------------------------------------------------------------
+        static method getAbsoluteDamage takes integer level returns real
+            return 25. + (10*level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // getStrengthDamage - returns the bonus damage of the spell
+        // derived from the Strength of the caster. 1.0 is 100% of the
+        // caster's Strength. Original value is 0. + (0*level)
+        //-------------------------------------------------------------
+        static method getStrengthDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // getAgilityDamage - returns the bonus damage of the spell
+        // derived from the Agility of the caster. 1.0 is 100% of the
+        // caster's Agility. Original value is 0. + (.15*level)
+        //-------------------------------------------------------------
+        static method getAgilityDamage takes integer level returns real
+            return 0. + (.15*level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // getIntelligenceDamage - returns the bonus damage of the spell
+        // derived from the Intelligence of the caster. 1.0 is 100% of the
+        // caster's Intelligence. Original value is 0. + (0*level)
+        //-------------------------------------------------------------
+        static method getIntelligenceDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod
+        
+        //-------------------------------------------------------------
+        // CAN_DESTROY_TREES - true if the spell can destroy trees. 
+        // Orignal value is true
+        //-------------------------------------------------------------
+        readonly static boolean CAN_DESTROY_TREES = true
+
+        //-------------------------------------------------------------
+        // PRELOAD - true if you want the spell to preload the spell and models
+        //-------------------------------------------------------------
+        readonly static boolean PRELOAD = true
+    endmodule    
+
+    native UnitAlive takes unit id returns boolean
+    module VengeanceSlashConfiguration	
+
+        //-------------------------------------------------------------
+        // SLASH_MODEL - model used to represent the slashes
+        // Original value is "Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile_mini.mdl"
+        //-------------------------------------------------------------
+        readonly static string SLASH_MODEL = "Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile_mini.mdl"
+         
+        //-------------------------------------------------------------
+        // SLASH_HIT - model used when the spell hits
+        // Original value is "Abilities\\Weapons\\SearingArrow\\SearingArrowMissile.mdl"
+        //-------------------------------------------------------------
+        readonly static string SLASH_HIT = "Abilities\\Weapons\\SearingArrow\\SearingArrowMissile.mdl"
+
+        //-------------------------------------------------------------
+        // SLASH_ATTACHMENT - attachment point of the SLASH_HIT model
+        // Original value is "chest"
+        //-------------------------------------------------------------
+        readonly static string SLASH_ATTACHMENT= "chest"
+
+        //-------------------------------------------------------------
+        // SLASH_HEIGHT - starting point of the slashes. Orignal value is 250
+        //-------------------------------------------------------------
+        readonly static real SLASH_HEIGHT = 250
+
+        //-------------------------------------------------------------
+        // ATTACK_TYPE - attacktype of the spell. Original value is ATTACK_TYPE_NORMAL
+        //-------------------------------------------------------------
+        readonly static attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
+
+        //-------------------------------------------------------------
+        // DAMAGE_TYPE - damagetype of the spell. Original value is DAMAGE_TYPE_NORMAL
+        //-------------------------------------------------------------
+        readonly static damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
+
+        //-------------------------------------------------------------
+        // WEAPON_TYPE - weapontype of the spell. Original value is null
+        //-------------------------------------------------------------
+        readonly static weapontype WEAPON_TYPE = null
+
+        //-------------------------------------------------------------
+        // CAN_MINISTUN - true if the spell stuns per hit. 
+        // Orignal value is true
+        //-------------------------------------------------------------
+        readonly static boolean CAN_MINISTUN = true
+
+        //-------------------------------------------------------------
+        // getSlashModelSize - returns the size of the model used for the
+        // slashes. Original value is 1.
+        //-------------------------------------------------------------
+        static method getSlashModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // getScatterRadius - returns the spread of the slashes.Usually
+        // it should match the AoE of the spell but you can go higher
+        // if the slashes is not satisfactory. Orignal value is 300.
+        //-------------------------------------------------------------
+        static method getScatterRadius takes integer level returns real
+            return 300.
+        endmethod
+
+        //-------------------------------------------------------------
+        // getDuration - returns the delay before damage is dealt. It will
+        // also affect the speed of the slashes visually. Original value
+        // is .15
+        //-------------------------------------------------------------
+        static method getDuration takes integer level returns real
+            return .15
+        endmethod
+
+        //-------------------------------------------------------------
+        // isVengeable - is the damage filter of the spell.
+        // unit u - is the unit in question
+        // player p - is the owner of the spell
+        // Original Conditions:
+        //  - u is alive
+        //  - u is not a structure
+        //  - u is not magic immune
+        //  - u is is an enemy of player p
+        //-------------------------------------------------------------
+        method isVengeable takes unit u, player p returns boolean
+            return UnitAlive(u) and not(IsUnitType(u, UNIT_TYPE_STRUCTURE)) and not(IsUnitType(u, UNIT_TYPE_MAGIC_IMMUNE)) and IsUnitEnemy(u,p)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onDamage - is the damage event of the spell.
+        // unit caster - is the caster of the spell
+        // unit target - is the enemy about to get damaged by the spell
+        // real damage - is the amount of damage about to be dealt
+        // attacktype attackType - attacktype of the spell
+        // damagetype damageType - damagetype of the spell
+        // weapontype weaponType - weapontype of the spell
+        //-------------------------------------------------------------
+        method onDamage takes unit caster, unit target, real damage, attacktype attackType, damagetype damageType, weapontype weaponType returns nothing
+            call UnitDamageTarget(caster, target, damage, true, false, attackType, damageType, weaponType)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onMinistun - is the ministun event of the spell
+        // unit u - target of the ministun
+        // integer l - level of the ministun
+        //-------------------------------------------------------------
+        method onMinistun takes unit u, integer l returns nothing
+            call orderCaster(u, l)
+        endmethod
+
+        //-------------------------------------------------------------
+        // PRELOAD - true if you want the spell to preload the spell and models
+        //-------------------------------------------------------------
+        readonly static boolean PRELOAD = true
+    endmodule
+    //-------------------------------------------------------------
+    // END OF CONFIGURATION
+    //-------------------------------------------------------------
+
+    //-------------------------------------------------------------
+    // DummyCaster module - made to handle the ministun. Configuration
+    // is found at the globals block
+    //-------------------------------------------------------------
+    module DummyCaster
+        private static unit dummyCaster
+        static method loadCaster takes boolean b returns nothing
+            if not(b) then
+                return
+            endif
+            set dummyCaster = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), CASTER_TYPE, 0, 0, 0)
+            call UnitAddAbility(dummyCaster, CASTER_ABILITY)
+        endmethod
+        static method orderCaster takes unit u, integer level returns nothing
+            if dummyCaster == null then
+                return
+            endif
+            call SetUnitX(dummyCaster, GetUnitX(u))
+            call SetUnitY(dummyCaster, GetUnitY(u))
+            call SetUnitAbilityLevel(dummyCaster, CASTER_ABILITY, level)
+            call IssueTargetOrderById(dummyCaster,CASTER_ORDER,u)
+        endmethod
+    endmodule
+
+    //-------------------------------------------------------------
+    // TreeDestruction module - made to handle tree destruction. 
+    // Configuration is found at the globals block
+    //-------------------------------------------------------------
+    module TreeDestruction
+        private static unit treeHarvester
+        static method loadHarvester takes boolean b returns nothing
+            if not(b) then
+                return
+            endif
+            set treeHarvester = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), HARVESTER_TYPE, 0, 0, 0)
+            call UnitAddAbility(treeHarvester, 'Ahar')
+        endmethod
+        
+        // calculates the radius. A modified version of GetRectFromCircleBJ(Location, Radius)
+        private static method getRadius takes real x, real y, real r returns rect
+	    return Rect(x - r, y - r, x + r, y + r)
+        endmethod
+
+        private static method destroyTrees takes nothing returns boolean
+            local destructable d = GetFilterDestructable()
+            if IssueTargetOrderById(treeHarvester,HARVESTER_ORDER,d) then
+                call KillDestructable(d)
+            endif
+            return false
+        endmethod
+        
+        // method for selecting trees at (x, y) within radius r
+        static method clearTrees takes real x, real y, real r returns nothing
+            local rect reg 
+            if treeHarvester == null then
+                return
+            endif
+            set reg = getRadius(x, y, r)
+            call EnumDestructablesInRect(reg, Filter(function thistype.destroyTrees), null)
+            call RemoveRect(reg)
+        endmethod
+    endmodule
+
+    //-------------------------------------------------------------
+    // VengeanceStormStages module - enum of stages
+    //-------------------------------------------------------------
+    module VengeanceStormStages
+        readonly static string STAGE_INITIAL = "INITIAL"
+        readonly static string STAGE_PRESLASH = "PRE_SLASH"
+        readonly static string STAGE_SLASHING = "SLASHING"
+        readonly static string STAGE_WAITING = "WAITING"
+        readonly static string STAGE_DONE = "DONE"
+    endmodule
+
+    //-------------------------------------------------------------
+    // VengeanceSlashCoordinates module - used for handling the (x, y, z)
+    // of the slashes. Also includes methods to standardize the processes
+    //-------------------------------------------------------------
+    module VengeanceSlashCoordinates
+
+        real startingX
+        real startingY
+        real startingZ
+        real endingX
+        real endingY
+        real endingZ
+        real scatterRadius
+
+        // a modified version of PolarProjectionBJ(Location, Dist, Angle) to
+        // mutate x by scatterRadius towards a random angle
+        method generateRandomX takes real x returns real
+            return x + GetRandomReal(0, scatterRadius) * Cos(GetRandomDirectionDeg())
+        endmethod
+
+        // a modified version of PolarProjectionBJ(Location, Dist, Angle) to
+        // mutate y by scatterRadius towards a random angle
+        method generateRandomY takes real y returns real
+            return y + GetRandomReal(0, scatterRadius) * Sin(GetRandomDirectionDeg())
+        endmethod
+
+        method setEndingPoint takes real x, real y returns nothing
+            local location l
+            set .endingX = generateRandomX(x)
+            set .endingY = generateRandomY(y)
+            set l = Location(.endingX, .endingY)
+            set .endingZ = GetLocationZ(l)
+            call RemoveLocation(l)
+        endmethod
+
+        method setStartingPoint takes real x, real y returns nothing
+            set .startingX = generateRandomX(x)
+            set .startingY = generateRandomY(y)
+            set .startingZ = SLASH_HEIGHT 
+        endmethod
+        
+        method lerp takes real a, real b returns real
+            return a + (b - a) * .t
+        endmethod
+    endmodule
+
+    //-------------------------------------------------------------
+    // VengeanceSlash module - represents a single slash of the spell
+    //-------------------------------------------------------------
+    struct VengeanceSlash
+        implement VengeanceSlashConfiguration
+        implement VengeanceSlashCoordinates
+        implement DummyCaster
+ 
+        // uses the pattern of optimized group enumeration
+        // found at: https://www.hiveworkshop.com/threads/vjass-optimization-using-a-first-of-group-loop-for-enumeration.223140/
+        private static group g = CreateGroup()
+       
+        // dynamic indexing pattern
+        // found at: https://www.hiveworkshop.com/threads/vjass-spell-templates.216166/
+        private static timer slashTimer = CreateTimer()
+        private static integer index = 0
+        private thistype next
+        private thistype prev
+        
+        private real t = 0.                // used for lerping
+        private real x              
+        private real y
+        private integer l                  // level
+        private unit caster 
+        private player owner
+        private real speed
+        private real damage = 0
+        private real aoe = 0
+        private boolean hasDamage = false  // only true for the first slash of the batch
+        private effect slash
+
+        private static method preload takes boolean b returns nothing
+            local unit p = null
+            if not(b) then
+                return
+            endif
+
+            set p = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), 'nech', 0, 0, 0)
+            call DestroyEffect(AddSpecialEffectTarget(SLASH_MODEL, p, "chest"))
+            call DestroyEffect(AddSpecialEffectTarget(SLASH_HIT, p, "chest"))
+            call RemoveUnit(p)
+            set p = null
+        endmethod
+
+        private method createSFX takes nothing returns nothing
+            set .slash = AddSpecialEffect(SLASH_MODEL, .startingX, .startingY)
+            call BlzSetSpecialEffectZ(.slash, .startingZ)
+        endmethod
+
+        private method update takes nothing returns boolean
+            call BlzSetSpecialEffectX(.slash, lerp(.startingX, .endingX))
+            call BlzSetSpecialEffectY(.slash, lerp(.startingY, .endingY))
+            call BlzSetSpecialEffectZ(.slash, lerp(.startingZ, .endingZ))
+            set .t = .t + .speed
+            return .t > 1
+        endmethod
+
+        private method clear takes nothing returns nothing
+            local unit u = null
+            call this.deallocate()
+            
+            // only the first slash has the damage flag turned on to sync the effect
+            // and the damage without setting up a weird timing code at the VengeanceStorm module
+            if .hasDamage then
+                call GroupEnumUnitsInRange(g, .x, .y, .aoe, null)
+                loop
+                    set u = FirstOfGroup(g)
+                    exitwhen u == null
+
+                    if .isVengeable(u, .owner) then      
+                        call DestroyEffect(AddSpecialEffectTarget(SLASH_HIT, u, SLASH_ATTACHMENT))                  
+                        call .onDamage(caster, u, .damage, .ATTACK_TYPE, .DAMAGE_TYPE, .WEAPON_TYPE)
+
+                        if .CAN_MINISTUN then
+                            call .onMinistun(u, .l)
+                        endif
+                    endif
+
+                    // not destroying the group as described from the thread 
+                    call GroupRemoveUnit(g,u)
+                endloop
+            endif
+
+            call BlzSetSpecialEffectScale(.slash, 0.001)
+            call DestroyEffect(.slash)
+
+            set this.next.prev = this.prev
+            set this.prev.next = this.next
+            set index = index - 1
+            if index == 0 then
+                call PauseTimer(.slashTimer)
+            endif
+            
+        endmethod
+
+        private static method onEffect takes nothing returns nothing
+            local thistype this = thistype(0).next
+            loop
+                exitwhen this==0
+ 
+                    // update returns true when t > 1.
+                    if this.update() then
+                        call this.clear()
+                    endif
+
+                set this = this.next
+            endloop
+        endmethod
+
+        // expected values:
+        // (x, y) - target location of the spell
+        // l - level
+        // p - owner of the spell
+        // b - has damage (if done right, only the first slash will be true)
+        // aoe - area of effect of the spell
+        static method create takes real x, real y, integer l, player p, unit u, boolean b, real aoe, real damage returns VengeanceSlash
+
+            local thistype this = thistype.allocate()
+            set this.next = 0
+            set this.prev = thistype(0).prev
+            set thistype(0).prev.next = this
+            set thistype(0).prev = this
+
+            set .l = l          
+            set .hasDamage = b
+            if .hasDamage then
+                set .damage = damage
+                set .aoe = aoe
+            endif
+            set .caster = u
+            set .owner = p
+            set .scatterRadius = getScatterRadius(l)
+            set .speed = 1. / (.getDuration(.l) / TIMER_SPEED)
+            set .x = x
+            set .y = y
+ 
+            call this.setStartingPoint(.x, .y)
+            call this.setEndingPoint(.x, .y)
+            call this.createSFX()
+
+            set index = index + 1
+            if index == 1 then
+                call TimerStart(slashTimer, TIMER_SPEED, true, function thistype.onEffect)
+            endif
+
+            return this
+        endmethod
+
+        // preload and dummy caster set up
+        private static method onInit takes nothing returns nothing
+            call .preload(.PRELOAD)
+            call loadCaster(CAN_MINISTUN)
+        endmethod
+
+    endstruct
+
+    //-------------------------------------------------------------
+    // VengeanceStorm module - controls when, where and how many slashes
+    // the spell is going to create
+    //-------------------------------------------------------------
+    struct VengeanceStorm
+        implement VengeanceStormConfiguration
+        implement VengeanceStormStages
+        implement TreeDestruction
+
+	private static timer vengeanceTimer = CreateTimer()
+        private static integer index = 0
+        private thistype next
+        private thistype prev
+
+        private unit caster
+        private real targetX
+        private real targetY
+        private player owner
+        private integer level
+        private integer slashesLeft
+        private real slashTimeLeft
+        private string stage
+        private effect range
+        private effect weapon
+        private real aoe
+        private real damage
+        private VengeanceSlash slash
+
+        private static method adjustSfxZ takes real x, real y, real z returns real
+            local location l = Location(x, y)
+            set z = GetLocationZ(l) + z
+            call RemoveLocation(l)
+            return z
+        endmethod
+
+
+        private static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
+            local real damage_agi = I2R(GetHeroStatBJ(bj_HEROSTAT_AGI, u, true)) * a
+            local real damage_str = I2R(GetHeroStatBJ(bj_HEROSTAT_STR, u, true)) * s
+            local real damage_int = I2R(GetHeroStatBJ(bj_HEROSTAT_INT, u, true)) * i
+            return damage_agi + damage_str + damage_int
+        endmethod
+
+        private static method preload takes boolean b returns nothing
+            local unit p = null
+            if not(b) then
+                return
+            endif
+
+            set p = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), 'nech', 0, 0, 0)
+            call UnitAddAbility(p, .VENGEANCE_STORM_ID)
+            call UnitRemoveAbility(p, .VENGEANCE_STORM_ID) 
+            call DestroyEffect(AddSpecialEffectTarget(SLASH_RANGE_MODEL, p, "chest"))
+            call RemoveUnit(p)
+            set p = null
+        endmethod
+
+        private method clear takes nothing returns nothing
+            call this.deallocate()
+
+            call BlzSetSpecialEffectScale(.range, 0.001)
+            call DestroyEffect(.range)
+            set this.caster = null
+
+            set this.next.prev = this.prev
+            set this.prev.next = this.next
+            set index = index - 1
+            if index == 0 then
+                call PauseTimer(.vengeanceTimer)
+            endif
+        endmethod
+
+        private static method onEffect takes nothing returns nothing
+
+            local integer i
+            local boolean hasDamage
+
+            local thistype this = thistype(0).next
+            loop
+                exitwhen this  == 0
+
+                if .stage == .STAGE_INITIAL then
+                    if this.slashTimeLeft > 0. then
+                        set .slashTimeLeft = .slashTimeLeft - TIMER_SPEED
+                    else
+                        set .stage = .STAGE_PRESLASH
+                       
+                        // range indicator
+                        set .range = AddSpecialEffect(SLASH_RANGE_MODEL, .targetX, .targetY)
+                        call BlzSetSpecialEffectScale(.range, getSlashRangeSize(.level))
+                        call BlzSetSpecialEffectZ(.range, adjustSfxZ(.targetX, .targetY, SLASH_RANGE_HEIGHT))
+
+                        call DestroyEffect(.weapon)
+
+                        if CAN_DESTROY_TREES then
+                            call clearTrees(.targetX, .targetY, .aoe)
+                        endif
+                    endif
+                endif
+
+                if this.stage == this.STAGE_PRESLASH then
+                    set i = 1
+                    set hasDamage = true
+                    loop
+                        exitwhen i > getSlashesPerStorm(this.level)
+                        set slash = VengeanceSlash.create(.targetX, .targetY, .level, .owner, .caster, hasDamage, aoe, .damage)
+                        set i = i + 1
+ 
+                        // only the first slash stores the damage
+                        set hasDamage = false
+                    endloop
+          
+                    set .slashesLeft = .slashesLeft - 1
+                    set .stage = .STAGE_WAITING
+                    set .slashTimeLeft = getDelayPerStorm(.level)
+                endif
+
+                if this.stage == .STAGE_WAITING then
+                    if .slashTimeLeft > 0 then
+                        set .slashTimeLeft = .slashTimeLeft - TIMER_SPEED
+                    else
+
+                        // only set the stage to STAGE_DONE when
+                        // all of the slashes are done executing
+                        if .slashesLeft == 0 then 
+                            set .stage = .STAGE_DONE
+                        else
+                            set .stage = .STAGE_PRESLASH
+                        endif
+                    endif
+                endif
+
+                // clean up step
+                if this.stage == .STAGE_DONE then
+                    call .clear() 
+                endif
+ 
+                set this = this.next
+            endloop
+        endmethod
+
+        private static method onCast takes nothing returns nothing
+            local thistype this
+            if GetSpellAbilityId() == VENGEANCE_STORM_ID  then
+                
+                set this = thistype.allocate()
+                set this.next = 0
+                set this.prev = thistype(0).prev
+                set thistype(0).prev.next = this
+                set thistype(0).prev = this
+              
+                set .caster = GetTriggerUnit()
+                set .owner = GetTriggerPlayer()
+                set .level = GetUnitAbilityLevel(.caster, VENGEANCE_STORM_ID)
+                set .targetX = GetSpellTargetX()
+                set .targetY = GetSpellTargetY()
+                set .aoe = getAoe(.level)
+                set .damage = getAbsoluteDamage(.level) + getDamageFromAttribute(.caster, getStrengthDamage(.level), getAgilityDamage(.level), getIntelligenceDamage(.level))
+                set .slashTimeLeft = getInitialSlashDelay(.level)
+                set .slashesLeft = getStormCount(this.level)
+                set .stage = .STAGE_INITIAL 
+                set .weapon = AddSpecialEffectTarget(WEAPON_MODEL, .caster, WEAPON_ATTACHMENT)
+                set index = index + 1
+                if index == 1 then
+                    call TimerStart(vengeanceTimer, TIMER_SPEED, true, function thistype.onEffect)
+                endif
+                
+            endif
+        endmethod
+
+        static method onInit takes nothing returns nothing
+            local trigger t = CreateTrigger()
+
+            call .preload(PRELOAD)
+            call loadHarvester(CAN_DESTROY_TREES)
+
+            call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SPELL_EFFECT)
+            call TriggerAddCondition(t, Condition(function thistype.onCast))
+            set t = null
+        endmethod
+    endstruct
+
+endscope
