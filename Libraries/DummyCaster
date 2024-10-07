@@ -1,0 +1,23 @@
+library DummyCaster initializer OnInit
+    globals
+        private unit dummyCaster
+        private integer CASTER_TYPE = 'h000'
+    endglobals
+    private function LoadCaster takes nothing returns nothing
+        set dummyCaster = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), CASTER_TYPE, 0, 0, 0)
+    endfunction
+    function orderCaster takes unit u, integer level, integer a, integer o returns nothing
+        if dummyCaster == null then
+            return
+        endif
+        call SetUnitX(dummyCaster, GetUnitX(u))
+        call SetUnitY(dummyCaster, GetUnitY(u))
+        call UnitAddAbility(dummyCaster, a)
+        call SetUnitAbilityLevel(dummyCaster, a, level)
+        call IssueTargetOrderById(dummyCaster,o,u)
+        call UnitRemoveAbility(dummyCaster, a)
+    endfunction
+    private function OnInit takes nothing returns nothing
+        call LoadCaster()
+    endfunction
+endlibrary
