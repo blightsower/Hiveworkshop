@@ -1,0 +1,34 @@
+private module LinkedList
+        readonly thistype next
+        readonly thistype prev
+
+        method init takes nothing returns thistype
+            set next = this
+            set prev = this
+
+            return this
+        endmethod
+
+        method pushBack takes thistype node returns thistype
+            set node.prev = prev
+            set node.next = this
+            set prev.next = node
+            set prev = node
+
+            return node
+        endmethod
+
+        method pushFront takes thistype node returns thistype
+            set node.prev = this
+            set node.next = next
+            set next.prev = node
+            set next = node
+
+            return node
+        endmethod
+
+        method pop takes nothing returns nothing
+            set prev.next = next
+            set next.prev = prev
+        endmethod
+    endmodule
