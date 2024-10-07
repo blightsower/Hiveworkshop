@@ -11,7 +11,7 @@ library TreeDestruction initializer OnInit
     endfunction
 
     private function GetRadius takes real x, real y, real r returns rect
-	      return Rect(x - r, y - r, x + r, y + r)
+	return Rect(x - r, y - r, x + r, y + r)
     endfunction
 
     private function DestroyTrees takes nothing returns boolean
@@ -23,11 +23,7 @@ library TreeDestruction initializer OnInit
     endfunction
 
     function ClearTrees takes real x, real y, real r returns nothing
-        local rect reg 
-        if treeHarvester == null then
-            return
-        endif
-        set reg = GetRadius(x, y, r)
+        local rect reg = GetRadius(x, y, r)
         call EnumDestructablesInRect(reg, Filter(function DestroyTrees), null)
         call RemoveRect(reg)
         set reg = null
