@@ -1,0 +1,39 @@
+library TreeDestruction initializer OnInit
+    globals
+        private constant integer HARVESTER_TYPE = 'h000'
+        private constant integer HARVESTER_ORDER = 852018
+        private unit treeHarvester
+    endglobals
+
+    private function LoadHarvester takes nothing returns nothing
+        set treeHarvester = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), HARVESTER_TYPE, 0, 0, 0)
+        call UnitAddAbility(treeHarvester, 'Ahar')
+    endfunction
+
+    private function GetRadius takes real x, real y, real r returns rect
+	      return Rect(x - r, y - r, x + r, y + r)
+    endfunction
+
+    private function DestroyTrees takes nothing returns boolean
+        local destructable d = GetFilterDestructable()
+        if IssueTargetOrderById(treeHarvester,HARVESTER_ORDER,d) then
+            call KillDestructable(d)
+        endif
+        return false
+    endfunction
+
+    function ClearTrees takes real x, real y, real r returns nothing
+        local rect reg 
+        if treeHarvester == null then
+            return
+        endif
+        set reg = GetRadius(x, y, r)
+        call EnumDestructablesInRect(reg, Filter(function DestroyTrees), null)
+        call RemoveRect(reg)
+        set reg = null
+    endfunction
+
+    private function OnInit takes nothing returns nothing
+        call LoadHarvester()
+    endfunction
+endlibrary
