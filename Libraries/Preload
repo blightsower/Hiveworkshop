@@ -1,12 +1,14 @@
 library Preload 
     globals
         private integer PRELOAD_TYPE = 'h000'
+        private real x = -1231.7
+        private real y = 988.4
     endglobals
 
     private module Init
         private static unit preloadDummy
         private static method onInit takes nothing returns nothing
-            set preloadDummy = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), PRELOAD_TYPE, 0, 0, 0)
+            set preloadDummy = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), PRELOAD_TYPE, x, y, 0)
         endmethod
         static method preloadEffect takes string s returns nothing
             call DestroyEffect(AddSpecialEffectTarget(s, thistype.preloadDummy, "origin"))
