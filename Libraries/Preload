@@ -1,6 +1,6 @@
 library Preload 
     globals
-        private integer PRELOAD_TYPE = 'h000'
+        private integer PRELOAD_TYPE = 'h001'
         private real x = -1231.7
         private real y = 988.4
     endglobals
@@ -17,9 +17,15 @@ library Preload
             call UnitAddAbility(thistype.preloadDummy, i)
             call UnitRemoveAbility(thistype.preloadDummy, i)
         endmethod
+        static method cleanPreload takes nothing returns nothing
+            call RemoveUnit(thistype.preloadDummy)
+        endmethod
     endmodule
 
     struct Initialize
         implement Init
+        static method onInit takes nothing returns nothing
+            call cleanPreload()
+        endmethod
     endstruct
 endlibrary
