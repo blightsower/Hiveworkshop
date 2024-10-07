@@ -7,9 +7,6 @@ library DummyCaster initializer OnInit
         set dummyCaster = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), CASTER_TYPE, 0, 0, 0)
     endfunction
     function orderCaster takes unit u, integer level, integer a, integer o returns nothing
-        if dummyCaster == null then
-            return
-        endif
         call SetUnitX(dummyCaster, GetUnitX(u))
         call SetUnitY(dummyCaster, GetUnitY(u))
         call UnitAddAbility(dummyCaster, a)
