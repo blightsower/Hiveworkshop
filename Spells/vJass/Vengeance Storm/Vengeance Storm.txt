@@ -138,7 +138,7 @@ scope VengeanceStorm
         // damage to every enemy within the target area. Original value is 6
         //-------------------------------------------------------------
         static method getStormCount takes integer level returns integer
-            return 2 + (level)
+            return 1 + (2*level)
         endmethod
 
         //-------------------------------------------------------------
@@ -154,7 +154,7 @@ scope VengeanceStorm
         // are spawned after the initial slash. Original value .35
         //-------------------------------------------------------------
         static method getDelayPerStorm takes integer level returns real
-            return .35
+            return .15
         endmethod
 
         //-------------------------------------------------------------
@@ -162,7 +162,7 @@ scope VengeanceStorm
         // Original value is 25. + (10*level)
         //-------------------------------------------------------------
         static method getAbsoluteDamage takes integer level returns real
-            return 25. + (10*level)
+            return 25. + (1*level)
         endmethod
 
         //-------------------------------------------------------------
@@ -249,7 +249,7 @@ scope VengeanceStorm
         // CAN_MINISTUN - true if the spell stuns per hit. 
         // Orignal value is true
         //-------------------------------------------------------------
-        readonly static boolean CAN_MINISTUN = true
+        readonly static boolean CAN_MINISTUN = false
 
         //-------------------------------------------------------------
         // getSlashModelSize - returns the size of the model used for the
@@ -382,6 +382,7 @@ scope VengeanceStorm
             set reg = getRadius(x, y, r)
             call EnumDestructablesInRect(reg, Filter(function thistype.destroyTrees), null)
             call RemoveRect(reg)
+            set reg = null
         endmethod
     endmodule
 
