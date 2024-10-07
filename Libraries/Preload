@@ -1,0 +1,23 @@
+library Preload 
+    globals
+        private integer PRELOAD_TYPE = 'h000'
+    endglobals
+
+    private module Init
+        private static unit preloadDummy
+        private static method onInit takes nothing returns nothing
+            set preloadDummy = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), PRELOAD_TYPE, 0, 0, 0)
+        endmethod
+        static method preloadEffect takes string s returns nothing
+            call DestroyEffect(AddSpecialEffectTarget(s, thistype.preloadDummy, "origin"))
+        endmethod
+        static method preloadAbility takes integer i returns nothing
+            call UnitAddAbility(thistype.preloadDummy, i)
+            call UnitRemoveAbility(thistype.preloadDummy, i)
+        endmethod
+    endmodule
+
+    struct Initialize
+        implement Init
+    endstruct
+endlibrary
