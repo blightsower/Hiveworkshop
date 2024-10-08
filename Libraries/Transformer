@@ -1,0 +1,36 @@
+module Transformer
+            real x1
+            real y1
+            real z1
+            real x2
+            real y2
+            real z2
+            real scatterRadius
+
+            method generateRandomX takes real x returns real
+                return x + GetRandomReal(0, scatterRadius) * Cos(GetRandomDirectionDeg())
+            endmethod
+
+            method generateRandomY takes real y returns real
+                return y + GetRandomReal(0, scatterRadius) * Sin(GetRandomDirectionDeg())
+            endmethod
+
+            method setEndingPoint takes real x, real y returns nothing
+                local location l
+                set .x2 = generateRandomX(x)
+                set .y2 = generateRandomY(y)
+                set l = Location(.x2, .y2)
+                set .z2 = GetLocationZ(l)
+                call RemoveLocation(l)
+            endmethod
+
+            method setStartingPoint takes real x, real y returns nothing
+                set .x1 = generateRandomX(x)
+                set .y1 = generateRandomY(y)
+                set .z1 = SLASH_HEIGHT 
+            endmethod
+        
+            method lerp takes real a, real b returns real
+                return a + (b - a) * .t
+            endmethod
+        endmodule
