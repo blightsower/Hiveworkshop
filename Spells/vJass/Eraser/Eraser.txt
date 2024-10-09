@@ -232,8 +232,8 @@ library Eraser requires DummyCaster, TreeDestruction, Preload
         // CASTER_MODEL  - the model attached to the caster. the function right below it controls
         // the size
         //-------------------------------------------------------------
-        readonly static constant string CASTER_MODEL = "Abilities\\Spells\\Undead\\UnholyFrenzy\\UnholyFrenzyTarget.mdl" //"Abilities\\Spells\\Items\\StaffOfSanctuary\\Staff_Sanctuary_Target.mdl"
-        readonly static constant string CASTER_ATTACHMENT = "overhead"
+        readonly static constant string CASTER_MODEL = "Abilities\\Spells\\Items\\StaffOfSanctuary\\Staff_Sanctuary_Target.mdl"
+        readonly static constant string CASTER_ATTACHMENT = "chest"
         static constant method getCasterModelSize takes integer level returns real
             return 1.
         endmethod
@@ -537,7 +537,7 @@ library Eraser requires DummyCaster, TreeDestruction, Preload
                         
                         // tree destruction
                         if Eraser.BEAM_DESTROYS_TREES then
-                            call Eraser.onBeamDestroyTree(.x, .y, .aoe)
+                            call Eraser.onBeamDestroyTree(.x2, .y2, .aoe)
                         endif
 
                         // optimized group enumeration
