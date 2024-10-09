@@ -1,0 +1,808 @@
+library Eraser requires DummyCaster, TreeDestruction, Preload
+    //-------------------------------------------------------------------------
+    // Eraser v1.0
+    // Author: Blightsower
+    //
+    // Description:
+    // Summons orbs of lightning that will shoot lightning towards a random point,
+    // dealing damage and applying a short stun to effected enemy units. The caster
+    // will have its armor increased throughout the duration of the spell.
+    //
+    // Requirements:
+    //  * Enable JassHelper
+    //
+    // How to enable JassHelper
+    //  * In the Trigger Editor window, look for the menu labeled JassHelper
+    //    and click Enable JassHelper
+    //-------------------------------------------------------------------------
+    // How to Import:
+    // 1. Copy and paste the objects from this map to your map namely: 
+    //    * Eraser
+    //    * Eraser (Ministun)
+    //    * Eraser (Bonuses)
+    //    * Eraser (Swap)
+    //    * Eraser (Disabled)
+    // 2. Copy and paste the Eraser Category into your map
+    // 3. Configure the spell so that everything points to the correct 
+    //    variables. Additional information about the variables are 
+    //    provided for clarity.
+    //-------------------------------------------------------------------------
+    // Note:
+    // This spell includes some optional libraries to handle tree destruction, dummy casting
+    // and preloading. The spell is arranged so that you can easily get rid of those libraries without
+    // going into the code. You might want to get rid of those libraries if you already have a system 
+    // that handles those functionalities or you just feel like writing your own. Should you choose to keep
+    // the libraries, there are a few things that you need to configure to fit your needs. Check the libraries
+    // individually to have the variables point to the correct objects.
+    // 
+    // How to remove optional libraries:
+    // To remove DummyCaster:
+    //     Remove DummyCaster from the requires and delete whats inside the onDummyCast function found
+    //     at the bottom of configurables. Delete DummyCaster script
+    // To remove TreeDestruction:
+    //     Remove TreeDestrcution from the requires and delete whats inside the onCastDestroyTree and onBeamDestroyTree
+    //     function found at the bottom of configurables. Delete TreeDestruction script
+    // To remove Preload:
+    //     Remove Preload from the requires and delete whats inside the onPreload function found
+    //     at the bottom of configurables. Delete Preload script
+    //
+    // While most of the functions and variable names are intuitive, it will also help to read what each 
+    // of the values do to affect the spell.
+    //-------------------------------------------------------------------------
+
+    //-------------------------------------------------------------------------
+    // CONFIGURABLES
+    //-------------------------------------------------------------------------
+    globals
+        // The interval used by the timer which is responsible for executing the spell
+        private constant real TIMER_SPEED = 0.03
+    endglobals
+    native UnitAlive takes unit id returns boolean
+    module EraserConfiguration
+        //-------------------------------------------------------------
+        // Hint:
+        // Press ctrl + d to check the object ids. 
+        //-------------------------------------------------------------
+
+        //-------------------------------------------------------------
+        // ERASER_ID - it should point to Eraser
+        // Note: the ability is based off of Monsoon
+        //-------------------------------------------------------------
+        readonly static constant integer ERASER_ID = 'A000'
+
+        //-------------------------------------------------------------
+        // CAST_SAFETY - it should point to Eraser (Swap)
+        // Note: the ability is based off of Engineering Upgrade to prevent the caster 
+        // from casting the spell while there is an ongoing instance of the spell
+        //-------------------------------------------------------------
+        readonly static constant integer CAST_SAFETY = 'A002'
+
+        //-------------------------------------------------------------
+        // BONUSES - it should point to Eraser (Bonuses)
+        // Note: this is a spell book responsible for providing the armor bonus while
+        // casting
+        //-------------------------------------------------------------
+        readonly static constant integer BONUSES = 'A004'
+
+        //-------------------------------------------------------------
+        // DUMMY_ABILITY_ID - it should point to Eraser (Ministun)
+        // Note: this spell is what the dummy caster will cast during the spell
+        //-------------------------------------------------------------
+        readonly static constant integer DUMMY_ABILITY_ID = 'A001'
+
+        //-------------------------------------------------------------
+        // DAMAGE
+        //-------------------------------------------------------------
+        readonly static attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
+        readonly static damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
+        readonly static weapontype WEAPON_TYPE = null
+
+        static constant method getAbsoluteDamage takes integer level returns real
+            return 50. + (10*level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // Hint:
+        // 1.0 = 100% of the attribute
+        //-------------------------------------------------------------
+        static constant method getStrengthDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod
+        static constant method getAgilityDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod
+        static constant method getIntelligenceDamage takes integer level returns real
+            return 1.0 + (0*level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // getAoe - returns the size of the targeting circle which determines the area 
+        // where the lightning orbs will appear
+        //-------------------------------------------------------------
+        static constant method getAoe takes integer level returns real 
+            return 500.
+        endmethod
+
+        //-------------------------------------------------------------
+        // getBeamAoe - returns the size of the area in which enemies are damaged by an
+        // individual lightning beam.
+        //-------------------------------------------------------------
+        static constant method getBeamAoE takes integer level returns real
+            return 250.
+        endmethod
+        
+        //-------------------------------------------------------------
+        // getSpellDuration - returns the maximum duration of the spell can be channeled.
+        // the main ability has 3600 sec channel. this function will break the channel of the unit
+        // which will end the spell
+        //-------------------------------------------------------------
+        static constant method getSpellDuration takes integer level returns real
+            return 10.
+        endmethod
+
+        //-------------------------------------------------------------
+        // getOrbCount - returns the number of lightning orbs summoned during the spell
+        //-------------------------------------------------------------
+        static constant method getOrbCount takes integer level returns integer
+            return 18
+        endmethod
+
+        //-------------------------------------------------------------
+        // getOrbDelay - returns the delay before the first orb appears after casting the spell
+        //-------------------------------------------------------------
+        static constant method getOrbDelay takes integer level returns real
+            return .75
+        endmethod
+
+        //-------------------------------------------------------------
+        // getNextOrbDelay - returns the delay before the next orb appears after casting the spell
+        //-------------------------------------------------------------
+        static constant method getNextOrbDelay takes integer level returns real
+            return .25
+        endmethod
+
+        //-------------------------------------------------------------
+        // getOrbAttackInterval - returns the delay between an orb's attack and its next attack
+        //-------------------------------------------------------------
+        static constant method getOrbAttackInterval takes integer level returns real
+            return 3.
+        endmethod
+
+        //-------------------------------------------------------------
+        // getLaserDuration - returns the delay before the lightning strikes the ground
+        //-------------------------------------------------------------
+        static constant method getLaserDuration takes integer level returns real
+            return .15
+        endmethod
+
+        //-------------------------------------------------------------
+        // MODELS
+        //-------------------------------------------------------------
+        //-------------------------------------------------------------
+        // ERASER_RANGE_MODEL - the range indicator of the spell. the function right below it controls
+        // the size
+        //-------------------------------------------------------------
+        readonly static constant string ERASER_RANGE_MODEL = "Abilities\\Spells\\Human\\Brilliance\\Brilliance.mdl"
+        static constant method getRangeIndicatorSize takes integer level returns real
+            return 4.5
+        endmethod
+
+        // controls the elevation of the range indicator
+        readonly static constant real ERASER_RANGE_HEIGHT = 0
+
+        //-------------------------------------------------------------
+        // ORB_MODEL - the model used by the floating orbs of lightning. the function right below it controls
+        // the size
+        //-------------------------------------------------------------
+        readonly static constant string ORB_MODEL = "Abilities\\Weapons\\FarseerMissile\\FarseerMissile.mdl" 
+        static constant method getOrbModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // ORB_ATTACK_MODEL - the model used whenever the orb is about to attack. the function right below it controls
+        // the size
+        //-------------------------------------------------------------
+        readonly static constant string ORB_ATTACK_MODEL = "Abilities\\Weapons\\FarseerMissile\\FarseerMissile.mdl" 
+        static constant method getAttackModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+
+        //-------------------------------------------------------------
+        // BEAM_IMPACT_MODEL - the model used whenever the lightning hits the ground. the function right below it controls
+        // the size
+        //-------------------------------------------------------------
+        readonly static constant string BEAM_IMPACT_MODEL = "Abilities\\Spells\\Human\\Thunderclap\\ThunderClapCaster.mdl"
+        static constant method getImpactModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // HIT_MODEL - the model attached to the damaged unit. the function right below it controls
+        // the size
+        //-------------------------------------------------------------
+        readonly static constant string HIT_MODEL ="Abilities\\Weapons\\Bolt\\BoltImpact.mdl"
+        readonly static constant string HIT_ATTACHMENT = "chest"
+        static constant method getHitModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // CASTER_MODEL  - the model attached to the caster. the function right below it controls
+        // the size
+        //-------------------------------------------------------------
+        readonly static constant string CASTER_MODEL = "Abilities\\Spells\\Undead\\UnholyFrenzy\\UnholyFrenzyTarget.mdl" //"Abilities\\Spells\\Items\\StaffOfSanctuary\\Staff_Sanctuary_Target.mdl"
+        readonly static constant string CASTER_ATTACHMENT = "overhead"
+        static constant method getCasterModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // Orbs' height distribution
+        //-------------------------------------------------------------
+        readonly static constant real ORB_MIN_HEIGHT = 200.
+        readonly static constant real ORB_MAX_HEIGHT = 350.
+
+        //-------------------------------------------------------------
+        // Dummy Caster
+        // If true, the dummy will cast 852095 (storm bolt) to affected enemies
+        //-------------------------------------------------------------
+        readonly static constant boolean USES_DUMMY_CASTER = true
+        readonly static constant integer DUMMY_ABILITY_ORDER = 852095
+
+        //-------------------------------------------------------------
+        // If true, individual beams can destroy trees
+        //-------------------------------------------------------------
+        readonly static constant boolean BEAM_DESTROYS_TREES = true
+
+        //-------------------------------------------------------------
+        // If true, destroys the trees at the target point
+        //-------------------------------------------------------------
+        readonly static constant boolean CAST_DESTROYS_TREES = false
+
+        //-------------------------------------------------------------
+        // Lightning type of the spell "CLPB" - chain lightning primary
+        //-------------------------------------------------------------
+        readonly static constant string ERASER_LIGHTNING = "CLPB"
+
+        //-------------------------------------------------------------
+        // Coordinates where SFX are moved before destruction. Find some unused corner in your map and hover
+        // your mouse while using the terrain editor to see the coordinates. it will be found at the lower left
+        // portion of your screen. 
+        //-------------------------------------------------------------
+        readonly static constant real SFX_CLEANUP_X = -1231.7
+        readonly static constant real SFX_CLEANUP_Y = 988.4
+
+        //-------------------------------------------------------------
+        // API
+        //-------------------------------------------------------------
+
+        //-------------------------------------------------------------
+        // isErasable - is the damage filter of the spell.
+        // unit u - is the unit in question
+        // player p - is the owner of the spell
+        // Original Conditions:
+        //  - u is alive
+        //  - u is not a structure
+        //  - u is not magic immune
+        //  - u is is an enemy of player p
+        //-------------------------------------------------------------
+        static method isErasable takes unit u, player p returns boolean
+            return UnitAlive(u) and not(IsUnitType(u, UNIT_TYPE_STRUCTURE)) and not(IsUnitType(u, UNIT_TYPE_MAGIC_IMMUNE)) and IsUnitEnemy(u,p)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onDamage - is the damage event of the spell.
+        // unit caster - is the caster of the spell
+        // unit target - is the enemy about to get damaged by the spell
+        // real damage - is the amount of damage about to be dealt
+        // attacktype attackType - attacktype of the spell
+        // damagetype damageType - damagetype of the spell
+        // weapontype weaponType - weapontype of the spell
+        //-------------------------------------------------------------
+        static method onDamage takes unit caster, unit target, real damage, attacktype attackType, damagetype damageType, weapontype weaponType returns nothing
+            call UnitDamageTarget(caster, target, damage, true, false, attackType, damageType, weaponType)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onDummyCast - is the ministun event of the spell
+        // unit u - target of the ministun
+        // integer l - level of the ministun
+        // uses the OrderCaster function from the optional library
+        //-------------------------------------------------------------
+        static method onDummyCast takes unit u, integer l returns nothing
+            call OrderCaster(u, l, DUMMY_ABILITY_ID, DUMMY_ABILITY_ORDER)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onCastDestroyTree - tree destruction at the target point
+        // (x, y) - target point
+        // aoe - radius of the destruction
+        // uses the ClearTrees function from the optional library
+        //-------------------------------------------------------------
+        static method onCastDestroyTree takes real x, real y, real aoe returns nothing
+            call ClearTrees(x, y, aoe)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onBeamDestroyTree - tree destruction where the beam lands
+        // (x, y) - target point
+        // aoe - radius of the destruction
+        // uses the ClearTreesAbility/Effect function from the optional library
+        //-------------------------------------------------------------
+        static method onBeamDestroyTree takes real x, real y, real aoe returns nothing
+            call ClearTrees(x, y, aoe)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onPreload - runs at map initialization
+        // uses the preload function from the optional library
+        //-------------------------------------------------------------
+        static method onPreload takes nothing returns nothing
+            call Initialize.preloadAbility(ERASER_ID)
+            call Initialize.preloadAbility(DUMMY_ABILITY_ID)
+            call Initialize.preloadAbility(CAST_SAFETY)
+            call Initialize.preloadAbility(BONUSES)
+            call Initialize.preloadEffect(ERASER_RANGE_MODEL)
+            call Initialize.preloadEffect(ORB_MODEL)
+            call Initialize.preloadEffect(ORB_ATTACK_MODEL)
+            call Initialize.preloadEffect(BEAM_IMPACT_MODEL)
+            call Initialize.preloadEffect(HIT_MODEL)
+            call Initialize.preloadEffect(CASTER_MODEL)
+        endmethod
+    endmodule
+    //-------------------------------------------------------------------------
+    // END OF CONFIGURABLES
+    //-------------------------------------------------------------------------
+
+
+    //-------------------------------------------------------------------------
+    // Eraser starts here
+    //-------------------------------------------------------------------------
+    scope Eraser
+
+        //-------------------------------------------------------------------------
+        // Singly Linked List set up where the end node is 0
+        //-------------------------------------------------------------------------
+        module SinglyLinkedList
+            thistype next
+            thistype prev
+
+            static method insertAtHead takes thistype this returns nothing
+                set this.next = 0
+                set this.prev = thistype(0).prev
+                set thistype(0).prev.next = this
+                set thistype(0).prev = this
+            endmethod
+  
+            static method pop takes thistype this returns nothing
+                set this.next.prev = this.prev
+                set this.prev.next = this.next
+            endmethod
+        endmodule
+
+
+        //-------------------------------------------------------------------------
+        // Module which handles vectors
+        //-------------------------------------------------------------------------
+        module Transformer
+            readonly real x1
+            readonly real y1
+            readonly real z1
+            readonly real x2
+            readonly real y2
+            readonly real z2
+
+            real t
+       
+            method setEndingPoint takes real x, real y, real r returns nothing
+                local location l
+                 
+                // generates the random offset for x and y
+                local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+                set .x2 = x + randomRadius * Cos(angle)
+                set .y2 = y + randomRadius * Sin(angle)
+              
+                // accounts for elevation
+                set l = Location(.x2, .y2)
+                set .z2 = GetLocationZ(l)
+                call RemoveLocation(l)
+            endmethod
+
+            method setStartingPoint takes real x, real y, real r, real h1, real h2 returns nothing
+
+                // generates the random offset for x and y
+                local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+                set .x1 = x + randomRadius * Cos(angle)
+                set .y1 = y + randomRadius * Sin(angle)
+ 
+                // adjusts height
+                set .z1 = GetRandomReal(h1, h2)
+            endmethod
+        
+            method lerp takes real a, real b returns real
+                return a + (b - a) * .t
+            endmethod
+        endmodule
+
+        //-------------------------------------------------------------------------
+        // Struct used to represent the floating orbs
+        //-------------------------------------------------------------------------
+        struct Orb extends array
+            implement Transformer
+
+            // the unit group from the optimized group enumeration thread
+            private static group g = CreateGroup()
+            private static integer instanceCount = 0
+            private static integer recycleCount = 0
+            private static integer array recycle
+
+            // privates
+            private real x              
+            private real y         
+            private unit caster 
+            private integer level
+            private player owner
+            private real speed
+            private real damage
+            private real aoe
+            private real attackTimeLeft
+            private real formationDelay
+            private boolean isWaiting
+            private boolean isAttacking
+            private effect orb
+            private lightning beam
+
+            static method createOrb takes Eraser instance returns thistype
+                local thistype this
+
+                // struct extends array set up
+                if (recycleCount > 0) then 
+                    set recycleCount = recycleCount - 1
+                    set this = recycle[recycleCount] 
+                else
+                    set instanceCount = instanceCount + 1
+                    set this = instanceCount
+                endif
+                
+                // load the values from the instance
+                set .x = instance.x
+                set .y = instance.y
+                set .caster = instance.caster
+                set .level = instance.level
+                set .owner = instance.owner
+                set .damage = instance.damage
+                set .formationDelay = instance.formationDelay
+                set .attackTimeLeft = Eraser.getOrbAttackInterval(instance.level)
+                set .aoe = instance.aoe
+                set .speed = 1. / (Eraser.getLaserDuration(instance.level) / TIMER_SPEED)
+                set .isWaiting = true
+
+                // apply random points
+                call setStartingPoint(.x, .y, .aoe, Eraser.ORB_MIN_HEIGHT, Eraser.ORB_MAX_HEIGHT)
+                call setEndingPoint(.x, y, .aoe)
+
+                // reassign the aoe after the random
+                set .aoe = instance.beamAoe
+                return this
+            endmethod
+
+            method update takes nothing returns nothing
+                local effect e = null
+                local unit u = null
+
+                // waiting for the orbs to appear
+                if .isWaiting then
+                    if .formationDelay > 0 then
+                        set .formationDelay = .formationDelay - TIMER_SPEED
+                    else
+                        set .isWaiting = false
+                        set .orb = AddSpecialEffect(Eraser.ORB_MODEL, .x1, .y1)
+                        call BlzSetSpecialEffectZ(.orb, z1)
+                        call BlzSetSpecialEffectScale(.orb, Eraser.getOrbModelSize(.level))
+                    endif
+                else
+                    // waiting for the orbs to attack
+                    if .attackTimeLeft > 0 then
+                        set .attackTimeLeft = .attackTimeLeft - TIMER_SPEED
+                    else
+                        set .attackTimeLeft = Eraser.getOrbAttackInterval(.level)
+                        set .isAttacking = true
+
+                        set e = AddSpecialEffect(Eraser.ORB_ATTACK_MODEL, .x1, .y1)
+                        call BlzSetSpecialEffectZ(e, z1)  
+                        call BlzSetSpecialEffectScale(e, Eraser.getAttackModelSize(.level))
+                        call DestroyEffect(e)
+                        set .beam = AddLightningEx(Eraser.ERASER_LIGHTNING, true, .x1, .y1, .z1, .x1, .y1, .z1)
+                    endif
+                endif
+
+                // when orbs are attacking
+                if .isAttacking then
+                    if .t <= 1 then
+                        call MoveLightningEx(.beam, true, .x1, .y1, .z1, lerp(.x1, .x2), lerp(.y1, .y2), lerp(.z1, .z2))
+                        set .t = .t + .speed
+                    else
+
+                        // resets everything so that orbs may attack again
+                        set.isAttacking = false
+                        set .t = 0
+                        call DestroyLightningBJ(.beam)
+                        set e = AddSpecialEffect(Eraser.BEAM_IMPACT_MODEL, .x2, .y2)
+                        call BlzSetSpecialEffectScale(e, Eraser.getImpactModelSize(.level))
+                        call DestroyEffect(e)
+                        
+                        // tree destruction
+                        if Eraser.BEAM_DESTROYS_TREES then
+                            call Eraser.onBeamDestroyTree(.x, .y, .aoe)
+                        endif
+
+                        // optimized group enumeration
+                        call GroupEnumUnitsInRange(g, .x2, .y2, .aoe, null)
+                        loop
+                            set u = FirstOfGroup(g)
+                            exitwhen u == null
+
+                            if Eraser.isErasable(u, .owner) then      
+                                // hit special effects
+                                set e = AddSpecialEffectTarget(Eraser.HIT_MODEL, u, Eraser.HIT_ATTACHMENT)
+                                call BlzSetSpecialEffectScale(e, Eraser.getHitModelSize(.level))
+                                call DestroyEffect(e)
+                               
+                                // damage
+                                call Eraser.onDamage(caster, u, .damage, Eraser.ATTACK_TYPE, Eraser.DAMAGE_TYPE, Eraser.WEAPON_TYPE)
+         
+                                // dummy caster
+                                if Eraser.USES_DUMMY_CASTER then
+                                    call Eraser.onDummyCast(u, .level)
+                                endif
+                            endif
+                            call GroupRemoveUnit(g,u)
+                        endloop
+                    endif
+                endif
+            endmethod
+
+            method destroy takes nothing returns nothing
+
+                // takes the effect to the corner before execu-- i mean clean up
+                call BlzSetSpecialEffectX(.orb, Eraser.SFX_CLEANUP_X)
+                call BlzSetSpecialEffectY(.orb, Eraser.SFX_CLEANUP_Y)
+                call DestroyEffect(.orb)
+
+                // manually resetting the values
+                call DestroyLightning(.beam)
+                set .x = 0
+                set .y = 0
+                set .caster = null
+                set .owner = null
+                set .speed = 0
+                set .damage = 0
+                set .aoe = 0
+                set .attackTimeLeft = 0
+                set .formationDelay = 0
+                set .isWaiting = true
+                set .isAttacking = false
+
+                // struct extends array set up
+                set recycle[recycleCount] = this
+                set recycleCount = recycleCount + 1
+            endmethod
+
+        endstruct
+
+        //-------------------------------------------------------------------------
+        // Struct used to represent the instance of the spell
+        //-------------------------------------------------------------------------
+        struct Eraser
+            implement EraserConfiguration
+            implement SinglyLinkedList
+
+            // dynamic indexing set up
+            private static timer eraserTimer = CreateTimer()
+            private static integer index = 0
+
+            // privates
+            readonly unit caster
+            readonly integer level
+            readonly player owner
+            readonly real x
+            readonly real y
+            readonly real damage
+            readonly real aoe
+            readonly real beamAoe
+            readonly real formationDelay
+            private real channelTimeLeft
+            private effect range
+            private effect casterEffect
+            private Orb orb
+
+            // used to adjust the elevation of the range indicator relative to the z of the target point
+            private static method adjustSfxZ takes real x, real y, real z returns real
+                local location l = Location(x, y)
+                set z = GetLocationZ(l) + z
+                call RemoveLocation(l)
+                return z
+            endmethod
+
+            // damage calculation
+            private static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
+                local real damage_agi = I2R(GetHeroStatBJ(bj_HEROSTAT_AGI, u, true)) * a
+                local real damage_str = I2R(GetHeroStatBJ(bj_HEROSTAT_STR, u, true)) * s
+                local real damage_int = I2R(GetHeroStatBJ(bj_HEROSTAT_INT, u, true)) * i
+                return damage_agi + damage_str + damage_int
+            endmethod
+
+            // clean up
+            private method clear takes nothing returns nothing
+                call this.deallocate()
+
+                // remove from linked list
+                call pop(this)
+                
+                // destroy special effects
+                call BlzSetSpecialEffectScale(.range, 0.001)
+                call DestroyEffect(.range)
+                                             
+                call BlzSetSpecialEffectX(.casterEffect, SFX_CLEANUP_X)
+                call BlzSetSpecialEffectY(.casterEffect, SFX_CLEANUP_Y)
+                call DestroyEffect(.casterEffect)
+
+                // removing the abilities added
+                call UnitRemoveAbility(.caster, CAST_SAFETY)
+                call UnitRemoveAbility(.caster, BONUSES)
+
+                // destroy the orb
+                call this.orb.destroy()
+
+                set .caster = null
+                set .owner = null
+
+                // dynamic indexing
+                set index = index - 1
+                if index == 0 then
+                    call PauseTimer(.eraserTimer)
+                endif  
+            endmethod 
+
+            // spell loop
+            private static method onEffect takes nothing returns nothing
+                local integer i = 0                      
+                local thistype this = thistype(0).next
+
+                loop 
+                    exitwhen this == 0
+
+                    // checks the order
+                    if GetUnitCurrentOrder(.caster) == String2OrderIdBJ("monsoon") then
+
+                        // spell cancels the order when the duration expires
+                        if .channelTimeLeft <= 0 then
+                            call IssueImmediateOrder(.caster, "stop")
+                        endif 
+
+                        set .channelTimeLeft = .channelTimeLeft - TIMER_SPEED
+                        call .orb.update()
+                    else
+                        // clean up
+                        call .clear()
+                    endif
+
+                    set this = this.next
+                endloop
+            endmethod
+
+            // cast function
+            private static method onCast takes nothing returns nothing
+                local thistype this 
+                local integer i    // loops orb count
+
+                local real x       // x of target
+                local real y       // y of target          
+                local unit c       // caster
+                local integer l    // level
+                local player p     // player
+                local real t       // time - spell's duration
+                local real a       // AOE
+                local real d       // damage
+                local real f       // formation delay
+                local real b       // beam AOE
+
+                if GetSpellAbilityId() == ERASER_ID then
+                    set i = 1
+
+                    set x = GetSpellTargetX()
+                    set y = GetSpellTargetY()                
+                    set c = GetTriggerUnit()
+                    set l = GetUnitAbilityLevel(c, ERASER_ID)
+                    set p = GetTriggerPlayer()
+                    set t = getSpellDuration(l)
+                    set a = getAoe(l)
+                    set d = getAbsoluteDamage(l) + getDamageFromAttribute(c, getStrengthDamage(l), getAgilityDamage(l), getIntelligenceDamage(l))
+                    set f = 0
+                    set b = getBeamAoE(l)
+
+                    // add cast safety and bonuses
+                    call UnitAddAbility(c, CAST_SAFETY)
+                    call UnitAddAbility(c, BONUSES)
+                    call SetUnitAbilityLevel(c, BONUSES, l)
+
+                    // spawn orbs but do not show the effects yet
+                    loop 
+                        exitwhen i > getOrbCount(l)
+
+                        set this = thistype.allocate()
+                        call insertAtHead(this)
+                        
+                        set .x = x
+                        set .y = y
+                        set .caster = c
+                        set .level = l
+                        set .owner = p 
+                        set .aoe = a
+                        set .damage = d
+                        set .channelTimeLeft = t
+                        set .formationDelay = getOrbDelay(.level) + f
+                        set .beamAoe = b
+
+                        // only the first instance has the range indicator and tree destruction
+                        if i == 1 then
+                            if CAST_DESTROYS_TREES then
+                                call onCastDestroyTree(.x, .y, .aoe)
+                            endif
+                            
+                            // range indicator
+                            set .casterEffect = AddSpecialEffectTarget(CASTER_MODEL, .caster, CASTER_ATTACHMENT)
+                            call BlzSetSpecialEffectScale(.casterEffect, Eraser.getCasterModelSize(.level))
+
+                            // caster effects
+                            set .range = AddSpecialEffect(ERASER_RANGE_MODEL, .x, .y)
+                            call BlzSetSpecialEffectScale(.range, getRangeIndicatorSize(.level))
+                            call BlzSetSpecialEffectZ(.range, adjustSfxZ(.x, .y, ERASER_RANGE_HEIGHT))
+                        endif
+
+                        // get orb specs
+                        set .orb = Orb.createOrb(this)
+
+                        // dynamic indexing
+                        set index = index + 1
+                        if index == 1 then                   
+                            call TimerStart(eraserTimer, TIMER_SPEED, true, function thistype.onEffect)
+                        endif
+ 
+                        // increment the formation delay
+                        set f = f + getNextOrbDelay(.level)
+                        set i = i + 1
+                    endloop
+
+                    // clean up
+                    set p = null
+                    set c = null
+                endif
+            endmethod
+
+            static method onInit takes nothing returns nothing
+                local integer i = 1
+                local trigger t = CreateTrigger()
+
+                // preload
+                call onPreload()
+
+                call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SPELL_EFFECT)
+                call TriggerAddCondition(t, Condition(function thistype.onCast))
+                set t = null
+
+                // disable the bonuses spell book
+                loop
+                    exitwhen i > 24
+                    call SetPlayerAbilityAvailableBJ( false, CAST_SAFETY, ConvertedPlayer(i))
+                    call SetPlayerAbilityAvailableBJ( false, BONUSES, ConvertedPlayer(i))
+                    set i = i + 1
+                endloop
+            endmethod
+        endstruct
+    endscope
+endlibrary
