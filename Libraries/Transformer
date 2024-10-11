@@ -1,34 +1,38 @@
 module Transformer
-            real x1
-            real y1
-            real z1
-            real x2
-            real y2
-            real z2
-            real scatterRadius
-            real t = 0
+            readonly real x1
+            readonly real y1
+            readonly real z1
+            readonly real x2
+            readonly real y2
+            readonly real z2
 
-            method generateRandomX takes real x returns real
-                return x + GetRandomReal(0, scatterRadius) * Cos(GetRandomDirectionDeg())
-            endmethod
-
-            method generateRandomY takes real y returns real
-                return y + GetRandomReal(0, scatterRadius) * Sin(GetRandomDirectionDeg())
-            endmethod
-
-            method setEndingPoint takes real x, real y returns nothing
+            real t
+       
+            method setEndingPoint takes real x, real y, real r returns nothing
                 local location l
-                set .x2 = generateRandomX(x)
-                set .y2 = generateRandomY(y)
+                 
+                // generates the random offset for x and y
+                local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+                set .x2 = x + randomRadius * Cos(angle)
+                set .y2 = y + randomRadius * Sin(angle)
+              
+                // accounts for elevation
                 set l = Location(.x2, .y2)
                 set .z2 = GetLocationZ(l)
                 call RemoveLocation(l)
             endmethod
 
-            method setStartingPoint takes real x, real y, real z returns nothing
-                set .x1 = generateRandomX(x)
-                set .y1 = generateRandomY(y)
-                set .z1 = z 
+            method setStartingPoint takes real x, real y, real r, real h1, real h2 returns nothing
+
+                // generates the random offset for x and y
+                local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+                set .x1 = x + randomRadius * Cos(angle)
+                set .y1 = y + randomRadius * Sin(angle)
+ 
+                // adjusts height
+                set .z1 = GetRandomReal(h1, h2)
             endmethod
         
             method lerp takes real a, real b returns real
