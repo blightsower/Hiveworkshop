@@ -1,0 +1,49 @@
+library Preload 
+    //---------------------------------------------------
+    // Make sure that PRELOAD_TYPE correctly points to the DummyCaster's Id
+    // press ctrl + d to show the id in the object editor
+    //
+    // Also change the (x, y) to point at the unused point in your map (usually the corner)
+    // You can find it by using the terrain editor and hovering over the point that you want
+    // the point is listed on the lower left portion of the editor labeled as point followed
+    // by the x and y values
+    //---------------------------------------------------
+    globals
+        private integer PRELOAD_TYPE = 'h001'
+        private real x = -1231.7
+        private real y = 988.4
+        private real cleanUpDelay = 0
+    endglobals
+
+    private module Init
+        private static unit preloadDummy
+        private static method onInit takes nothing returns nothing
+            set preloadDummy = CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE), PRELOAD_TYPE, x, y, 0)
+        endmethod
+        static method preloadEffect takes string s returns nothing
+            call DestroyEffect(AddSpecialEffectTarget(s, thistype.preloadDummy, "origin"))
+        endmethod
+        static method preloadAbility takes integer i returns nothing
+            call UnitAddAbility(thistype.preloadDummy, i)
+            call UnitRemoveAbility(thistype.preloadDummy, i)
+        endmethod
+        static method cleanPreload takes nothing returns nothing
+            call RemoveUnit(thistype.preloadDummy)
+            set preloadDummy = null
+        endmethod
+    endmodule
+
+    struct Initialize
+        implement Init
+        private static method clean takes nothing returns nothing
+            call cleanPreload()
+        endmethod
+
+        static method onInit takes nothing returns nothing
+            local trigger t = CreateTrigger()
+            call TriggerRegisterTimerEventSingle(t, cleanUpDelay)
+            call TriggerAddAction(t, function thistype.clean)
+            set t = null
+        endmethod
+    endstruct
+endlibrary
