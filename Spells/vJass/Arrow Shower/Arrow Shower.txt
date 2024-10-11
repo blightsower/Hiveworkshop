@@ -475,7 +475,7 @@ library ArrowShower requires TreeDestruction,Preload, DummyCaster
                                 set .damage = getAbsoluteDamage(.level) + getDamageFromAttribute(.caster, getStrengthDamage(.level), getAgilityDamage(.level), getIntelligenceDamage(.level))
 
                                 if DESTROYS_TREES then
-                                    call onDestroyTree(.x2, .y2, .aoe)
+                                    call onDestroyTree(.x2, .y2, .getArrowAoe(.level))
                                 endif
 
                                 call GroupEnumUnitsInRange(g, .x3, .y3, .getArrowAoe(.level), null)
