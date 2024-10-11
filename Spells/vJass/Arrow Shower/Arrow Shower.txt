@@ -1,0 +1,594 @@
+library ArrowShower requires TreeDestruction,Preload, DummyCaster 
+    //---------------------------------------------------------------
+    // Arrow Shower v1.0
+    // Author: Blightsower
+    //
+    // Description - Fires an arrow that explodes into multiple arrows, 
+    // raining down upon the target area, dealing damage and inflicting a 
+    // brief stun on affected enemies.
+    //---------------------------------------------------------------
+    // Requirements:
+    //  * Enable JassHelper
+    //
+    // How to enable JassHelper
+    //  * In the Trigger Editor window, look for the menu labeled JassHelper
+    //    and click Enable JassHelper
+    //-------------------------------------------------------------------------
+    // How to Import:
+    // 1. Copy and paste the objects from this map to your map namely:
+    //    * Arrow Shower
+    //    * Arrow Shower (Ministun)
+    // 2. Copy and paste the Arrow Shower Category into your map
+    // 3. Configure the spell so that everything points to the correct
+    //    variables. Additional information about the variables are
+    //    provided for clarity.
+    //-------------------------------------------------------------------------
+    // Note:
+    // This spell includes some optional libraries to handle tree destruction, dummy casting
+    // and preloading. The spell is arranged so that you can easily get rid of those libraries without
+    // going into the code. You might want to get rid of those libraries if you already have a system
+    // that handles those functionalities or you just feel like writing your own. Should you choose to keep
+    // the libraries, there are a few things that you need to configure to fit your needs. Check the libraries
+    // individually to have the variables point to the correct objects.
+    //
+    // How to remove optional libraries:
+    // To remove DummyCaster:
+    //     Remove DummyCaster from the requires and delete whats inside the onDummyCast function found
+    //     at the bottom of configurables. Delete DummyCaster script
+    // To remove TreeDestruction:
+    //     Remove TreeDestrcution from the requires and delete whats inside the onDestroyTree
+    //     function found at the bottom of configurables. Delete TreeDestruction script
+    // To remove Preload:
+    //     Remove Preload from the requires and delete whats inside the onPreload function found
+    //     at the bottom of configurables. Delete Preload script
+    //-------------------------------------------------------------------------
+
+    //-------------------------------------------------------------------------
+    // CONFIGURABLES
+    //-------------------------------------------------------------------------
+    globals
+        //-------------------------------------------------------------------------
+        // TIMER SPEED - usually you dont touch it. It is the interval which the spell
+        // uses to update the arrows
+        //-------------------------------------------------------------------------
+        private constant real TIMER_SPEED = 0.03
+    endglobals
+    native UnitAlive takes unit id returns boolean
+    module ArrowShowerConfiguration
+        //-------------------------------------------------------------------------
+        // ABILITY_ID - it should point to the id of Arrow Shower. Use ctrl + d to find out
+        // the id of your objects
+        //-------------------------------------------------------------------------
+        readonly static constant integer ABILITY_ID = 'A000'
+
+        //-------------------------------------------------------------
+        // MODELS
+        //-------------------------------------------------------------
+
+        //-------------------------------------------------------------------------
+        // ARROW_INITIAL_MODEL - model used by the main arrow fired by the spell
+        // under it is the function that controls the size
+        //-------------------------------------------------------------------------
+        readonly static constant string ARROW_INITIAL_MODEL = "Abilities\\Weapons\\BallistaMissile\\BallistaMissile.mdl"
+        static constant method getArrowInitialModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------------------
+        // ARROW_INITIAL_DEATH_MODEL - model used when the main arrow gets destroyed
+        // under it is the function that controls the size
+        //-------------------------------------------------------------------------
+        readonly static constant string ARROW_INITIAL_DEATH_MODEL = "Abilities\\Spells\\Human\\FlakCannons\\FlakTarget.mdl"
+        static constant method getArrowInitialDeathModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------------------
+        // ARROW_RAIN_MODEL - model for the arrows hitting the  ground
+        // under it is the function that controls the size
+        //-------------------------------------------------------------------------
+        readonly static constant string ARROW_RAIN_MODEL = "Abilities\\Weapons\\SearingArrow\\SearingArrowMissile.mdl"
+        static constant method getArrowRainModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------------------
+        // ARROW_RAIN_IMPACT_MODEL - model used when the arrows hit the ground
+        // under it is the function that controls the size
+        //-------------------------------------------------------------------------
+        readonly static constant string ARROW_RAIN_IMPACT_MODEL = "Abilities\\Spells\\Items\\AIfb\\AIfbSpecialArt.mdl"
+        static constant method getArrowRainImpactModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------------------
+        // ARROW_RAIN_IMPACT_MODEL - model used when the arrows damages an enemy unit
+        // under it is the function that controls the size
+        //-------------------------------------------------------------------------
+        readonly static constant string ARROW_RAIN_HIT_MODEL = "Abilities\\Spells\\Items\\AIfb\\AIfbSpecialArt.mdl"
+        readonly static constant string ARROW_RAIN_HIT_ATTACHMENT = "chest"
+        static constant method getHitModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // BEHAVIOR
+        //-------------------------------------------------------------
+
+        //-------------------------------------------------------------
+        // INITIAL_ARROW_START_ROLL - the starting angle of the arrow when it first spawns
+        //-------------------------------------------------------------
+        readonly static constant real INITIAL_ARROW_START_ROLL = 270. * bj_DEGTORAD
+
+        //-------------------------------------------------------------
+        // INITIAL_ARROW_END_ROLL - the final angle of the arrow when it reaches the maximum height
+        //-------------------------------------------------------------
+        readonly static constant real INITIAL_ARROW_END_ROLL = 360. * bj_DEGTORAD
+
+        //-------------------------------------------------------------
+        // RAIN_ARROW_START_ROLL - the starting angle of the arrow when it starts to go down
+        //-------------------------------------------------------------
+        readonly static constant real RAIN_ARROW_START_ROLL = 360. * bj_DEGTORAD
+
+        //-------------------------------------------------------------
+        // RAIN_ARROW_END_ROLL - the final angle of the arrow when it reaches the ground
+        //-------------------------------------------------------------
+        readonly static constant real RAIN_ARROW_END_ROLL = 450. * bj_DEGTORAD
+
+        //-------------------------------------------------------------
+        // getInitialArrowDuration - returns how fast the main arrow will take in seconds
+        // to reach the maximum height
+        //-------------------------------------------------------------
+        static constant method getInitialArrowDuration takes integer level returns real
+            return .65
+        endmethod
+
+        //-------------------------------------------------------------
+        // getRainArrowDuration - returns how fast the rain of arrows will take in seconds
+        // to reach the ground
+        //-------------------------------------------------------------
+        static constant method getRainArrowDuration takes integer level returns real
+            return .5
+        endmethod
+
+        //-------------------------------------------------------------
+        // getRainArrowDuration - returns the upper limit of how much delay each arrows of the
+        // rain of arrows will take. Its random between 0 and the the number returned by this
+        // function
+        //-------------------------------------------------------------
+        static constant method getRainArrowDurationPenalty takes integer level returns real
+            return 1.25
+        endmethod
+
+        //-------------------------------------------------------------
+        // Arrow starting height and max height
+        //-------------------------------------------------------------
+        readonly static constant real ARROW_STARTING_HEIGHT = 50.
+        static constant method getMaxHeight takes integer level returns real
+            return 500.
+        endmethod
+
+        //-------------------------------------------------------------
+        // DAMAGE
+        // Hint:
+        // 1.0 = 100% of the attribute
+        //-------------------------------------------------------------
+        readonly static attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
+        readonly static damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
+        readonly static weapontype WEAPON_TYPE = null
+        static constant method getAbsoluteDamage takes integer level returns real
+            return 50. + (10*level)
+        endmethod
+        static constant method getStrengthDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod
+        static constant method getAgilityDamage takes integer level returns real
+            return 0. + (0.15*level)
+        endmethod
+        static constant method getIntelligenceDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod        
+        static constant method getArrowCount takes integer level returns integer
+            return 5 + (5*level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // AREA OF EFFECT
+        //-------------------------------------------------------------
+        //-------------------------------------------------------------
+        // getCastAoe - returns the area of effect of the spell. usually the same area
+        // as the spell from the object editor
+        //-------------------------------------------------------------
+        static constant method getCastAoe takes integer level returns real
+            return 150. + (50*level)
+        endmethod
+
+        //-------------------------------------------------------------
+        // getArrowAoe - returns the area of effect per arrow
+        //-------------------------------------------------------------
+        static constant method getArrowAoe takes integer level returns real
+            return 100.
+        endmethod
+
+        //-------------------------------------------------------------
+        // API
+        //-------------------------------------------------------------
+        //-------------------------------------------------------------
+        // onDamage - is the damage event of the spell.
+        // unit caster - is the caster of the spell
+        // unit target - is the enemy about to get damaged by the spell
+        // real damage - is the amount of damage about to be dealt
+        // attacktype attackType - attacktype of the spell
+        // damagetype damageType - damagetype of the spell
+        // weapontype weaponType - weapontype of the spell
+        //-------------------------------------------------------------
+        static method onDamage takes unit caster, unit target, real damage, attacktype attackType, damagetype damageType, weapontype weaponType returns nothing
+            call UnitDamageTarget(caster, target, damage, true, false, attackType, damageType, weaponType)
+        endmethod
+
+        //-------------------------------------------------------------
+        // isShowerable - is the damage filter of the spell.
+        // unit u - is the unit in question
+        // player p - is the owner of the spell
+        // Original Conditions:
+        //  - u is alive
+        //  - u is not a structure
+        //  - u is not magic immune
+        //  - u is is an enemy of player p
+        //-------------------------------------------------------------
+        static method isShowerable takes unit u, player p returns boolean
+            return UnitAlive(u) and not(IsUnitType(u, UNIT_TYPE_STRUCTURE)) and not(IsUnitType(u, UNIT_TYPE_MAGIC_IMMUNE)) and IsUnitEnemy(u,p)
+        endmethod
+        
+	//-------------------------------------------------------------
+        // onDestroyTree - function called by the spell when destroying trees
+        // (x, y) - landing point of the arrows
+        // aoe - radius of the destruction
+        // uses the ClearTrees function from the optional library
+        //-------------------------------------------------------------
+        readonly static constant boolean DESTROYS_TREES = true
+        static method onDestroyTree takes real x, real y, real aoe returns nothing
+            call ClearTrees(x, y, aoe)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onDummyCast - is the ministun event of the spell
+        // unit u - target of the ministun
+        // integer l - level of the ministun
+        // uses the OrderCaster function from the optional library
+        //-------------------------------------------------------------
+        readonly static constant boolean USES_DUMMY_CASTER = true
+        readonly static constant integer DUMMY_ABILITY_ID = 'A001'    // must point to Arrow Shower (Ministun)
+        readonly static constant integer DUMMY_ABILITY_ORDER = 852095 // storm bolt
+        static method onDummyCast takes unit u, integer l returns nothing
+            call OrderCaster(u, l, DUMMY_ABILITY_ID, DUMMY_ABILITY_ORDER)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onPreload - runs at map initialization
+        // uses the preload function from the optional library
+        //-------------------------------------------------------------
+        static method onPreload takes nothing returns nothing
+            call Initialize.preloadAbility(ABILITY_ID)
+            call Initialize.preloadAbility(DUMMY_ABILITY_ID)
+            call Initialize.preloadEffect(ARROW_INITIAL_MODEL)
+            call Initialize.preloadEffect(ARROW_INITIAL_DEATH_MODEL)
+            call Initialize.preloadEffect(ARROW_RAIN_MODEL )
+            call Initialize.preloadEffect(ARROW_RAIN_IMPACT_MODEL)
+            call Initialize.preloadEffect(ARROW_RAIN_HIT_MODEL)
+        endmethod
+
+    endmodule
+    //-------------------------------------------------------------------------
+    // END OF CONFIGURABLES
+    //-------------------------------------------------------------------------    
+
+    //-------------------------------------------------------------------------
+    // START OF THE SPELL
+    //-------------------------------------------------------------------------  
+    scope ArrowShower
+    
+        // helper modules
+        module SinglyLinkedList
+            thistype next
+            thistype prev
+
+            static method insertAtHead takes thistype this returns nothing
+                set this.next = 0
+                set this.prev = thistype(0).prev
+                set thistype(0).prev.next = this
+                set thistype(0).prev = this
+            endmethod
+ 
+            static method pop takes thistype this returns nothing
+                set this.next.prev = this.prev
+                set this.prev.next = this.next
+            endmethod
+        endmodule
+    
+        module Transformer
+            readonly real x1
+            readonly real y1
+            readonly real z1
+            readonly real x2
+            readonly real y2
+            readonly real z2
+            readonly real x3
+            readonly real y3
+            readonly real z3
+            readonly real t=0
+       
+            method quadraticBezier takes real t, real p1, real p2, real p3 returns real
+                return Pow((1-t),2)*p1 + 2*(1-t)*t*p2 + Pow(t,2)*p3
+            endmethod
+        
+            method lerp takes real a, real b, real t returns real
+                return a + (b - a) * t
+            endmethod
+       
+            method setStartingArc takes real startX, real startY, real endX, real endY returns nothing
+                // first point of the spell is the position of the caster
+                set .x1 = startX
+                set .y1 = startY
+                set .z1 = ARROW_STARTING_HEIGHT
+
+                // second point is same as the first but higher
+                set .x2 = .x1
+                set .y2 = .y1
+                set .z2 = getMaxHeight(.level)
+                
+                // last point is the middle point between the caster and the target area 
+                // z is the same as point 2
+                set .x3 = lerp(startX, endX, .5)
+                set .y3 = lerp(startY, endY, .5) 
+                set .z3 = .z2
+            endmethod
+       
+            method setEndingArc takes real startX, real startY, real endX, real endY, real r returns nothing
+                local location l
+                // generates the random offset for x and y
+                local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+                
+                // first point is where the last point of the first arrow ends
+                set .x1 = startX
+                set .y1 = startY
+                set .z1 = getMaxHeight(.level)
+
+                // second point is random radius from the target point of the spell
+                // maintains the height
+                set .x2 = endX + randomRadius * Cos(angle)
+                set .y2 = endY + randomRadius * Sin(angle)
+                set .z2 = .z1
+                
+                // third point is the landing point of the spell
+                // account for elevation
+                set l = Location(.x2, .y2)
+                set .x3 = .x2
+                set .y3 = .y2
+                set .z3 = GetLocationZ(l)
+
+                call RemoveLocation(l)
+            endmethod
+
+            // computes the appropriate yaw of the projectiles in radian
+            method calculateYaw takes real startX, real startY, real endX, real endY returns real
+                local real dx = endX - startX
+                local real dy = endY - startY
+                return Atan2(dy, dx)
+            endmethod
+
+        endmodule
+    
+        struct ArrowShower
+            implement ArrowShowerConfiguration
+            implement SinglyLinkedList
+            implement Transformer
+            
+            private static string ARROW_INITIAL = "INITIAL_ARROW"
+            private static string ARROW_RAIN = "ARROW_RAIN"
+            private static group g = CreateGroup()
+            private static timer arrowTimer = CreateTimer()
+            private static integer index = 0
+
+            private real targetX
+            private real targetY
+            private real aoe
+            private real damage
+            private unit caster
+            private player owner
+            private integer level
+            private real duration
+            private string arrowType
+            private effect arrow 
+            private real yaw
+            private real rollStart
+            private real rollEnd
+            
+            // damage calculation
+            private static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
+                local real damage_agi = I2R(GetHeroStatBJ(bj_HEROSTAT_AGI, u, true)) * a
+                local real damage_str = I2R(GetHeroStatBJ(bj_HEROSTAT_STR, u, true)) * s
+                local real damage_int = I2R(GetHeroStatBJ(bj_HEROSTAT_INT, u, true)) * i
+                return damage_agi + damage_str + damage_int
+            endmethod
+            
+            private method clear takes nothing returns nothing
+                call this.deallocate()
+                call pop(this)
+                
+                set .caster = null
+                set .owner = null
+                call DestroyEffect(.arrow)
+                
+                set index = index - 1
+                if index == 0 then
+                    call PauseTimer(arrowTimer)
+                endif
+            endmethod
+            
+            private method update takes nothing returns boolean
+                local real roll = lerp(.rollStart, .rollEnd, .t) 
+                
+                // positionof the projectile
+                local real x = quadraticBezier(.t, .x1, .x2, .x3)
+                local real y = quadraticBezier(.t, .y1, .y2, .y3)
+                local real z = quadraticBezier(.t, .z1, .z2, .z3)
+                               
+                call BlzSetSpecialEffectX(.arrow, x)
+                call BlzSetSpecialEffectY(.arrow, y)
+                call BlzSetSpecialEffectZ(.arrow, z)
+                
+                // applies the correct pitch
+                call BlzSetSpecialEffectPitch(.arrow, roll)
+
+                set .t = .t + 1/(.duration/TIMER_SPEED)
+                return .t > 1.
+            endmethod
+            
+            private static method onEffect takes nothing returns nothing
+                local thistype this = thistype(0).next
+                local effect e 
+                local unit u
+                local integer i = 1
+                loop 
+                    exitwhen this == 0
+                        if update() then
+                            
+                            // if the arrow type is the main arrow
+                            if .arrowType == ARROW_INITIAL then
+                                set e = AddSpecialEffect(ARROW_INITIAL_DEATH_MODEL, .x3, .y3) 
+                                call BlzSetSpecialEffectScale(e, getArrowInitialDeathModelSize(.level))
+                                call BlzSetSpecialEffectZ(e, .z3)
+                                call BlzSetSpecialEffectYaw(e, .yaw)
+
+                                call DestroyEffect(e)
+                                loop
+                                    exitwhen i > getArrowCount(.level)
+                                    call ArrowShower.createArrow(.x3, .y3, .targetX, targetY, .caster, .owner, .level, ARROW_RAIN)
+                                    set i = i + 1
+                                endloop
+                                call this.clear()
+
+                            // if the arrow type is the rain of arrows
+                            else
+                                set .damage = getAbsoluteDamage(.level) + getDamageFromAttribute(.caster, getStrengthDamage(.level), getAgilityDamage(.level), getIntelligenceDamage(.level))
+
+                                if DESTROYS_TREES then
+                                    call onDestroyTree(.x2, .y2, .aoe)
+                                endif
+
+                                call GroupEnumUnitsInRange(g, .x3, .y3, .getArrowAoe(.level), null)
+                                loop
+                                    set u = FirstOfGroup(g)
+                                    exitwhen u == null
+                                    
+                                    if isShowerable(u, .owner) then    
+ 
+                                        // hit special effects
+                                        set e = AddSpecialEffectTarget(ARROW_RAIN_HIT_MODEL, u, ARROW_RAIN_HIT_ATTACHMENT)
+                                        call BlzSetSpecialEffectScale(e, getHitModelSize(.level))
+                                        call DestroyEffect(e)
+                                      
+                                        // damage
+                                        call onDamage(.caster, u, .damage, ATTACK_TYPE, DAMAGE_TYPE, WEAPON_TYPE)
+                
+                                        // dummy caster
+                                        if USES_DUMMY_CASTER then
+                                            call onDummyCast(u, .level)
+                                        endif
+                                    endif
+                                    
+                                    call GroupRemoveUnit(g,u)
+                                endloop
+                                
+                                // impact sfx
+                                set e = AddSpecialEffect(ARROW_RAIN_IMPACT_MODEL, .x3, .y3) 
+                                call BlzSetSpecialEffectScale(e, getArrowRainImpactModelSize(.level))
+                                call DestroyEffect(e)
+                                call this.clear()
+                            endif
+                        endif
+                    set this = this.next
+                endloop
+            endmethod
+            
+            // creates the arrows
+            static method createArrow takes real startX, real startY, real endX, real endY, unit caster, player owner, integer level, string arrowType returns nothing
+                local thistype this = thistype.allocate()
+                call insertAtHead(this)
+                
+                set .targetX = endX
+                set .targetY = endY
+                set .caster = caster
+                set .owner = owner
+                set .level = level
+                set .aoe = getCastAoe(.level)
+
+                // main arrow properties
+                if arrowType == ARROW_INITIAL then
+                    call .setStartingArc(startX, startY, .targetX, .targetY)
+                    set .arrowType = ARROW_INITIAL
+                    set .rollStart = INITIAL_ARROW_START_ROLL
+                    set .rollEnd = INITIAL_ARROW_END_ROLL
+                    set .duration = getInitialArrowDuration(.level)
+                    set .arrow = AddSpecialEffect(ARROW_INITIAL_MODEL, startX, startY)
+                    call BlzSetSpecialEffectScale(.arrow, getArrowInitialModelSize(.level))
+
+                // rain of arrows properties
+                else 
+                    call .setEndingArc(startX, startY, .targetX, .targetY, .aoe)
+                    set .arrowType = ARROW_RAIN
+                    set .rollStart = RAIN_ARROW_START_ROLL
+                    set .rollEnd = RAIN_ARROW_END_ROLL
+                    set .duration = getRainArrowDuration(.level) + GetRandomReal(0, getRainArrowDurationPenalty(.level))
+                    set .arrow = AddSpecialEffect(ARROW_RAIN_MODEL, startX, startY)
+                    call BlzSetSpecialEffectScale(.arrow, getArrowRainModelSize(.level))
+                endif
+ 
+                // applies the yaw
+                set .yaw = calculateYaw(startX, startY, .targetX, .targetY)
+                call BlzSetSpecialEffectYaw(.arrow, .yaw)
+                
+                set index = index + 1
+                if index == 1 then
+                    call TimerStart(arrowTimer, TIMER_SPEED, true, function thistype.onEffect)
+                endif
+            endmethod
+            
+            private static method onCast takes nothing returns nothing
+                local real unitX
+                local real unitY
+                local real targetX
+                local real targetY
+                local unit caster
+                local player owner
+                local integer level
+
+                if GetSpellAbilityId() == ABILITY_ID then
+                    
+                    set caster = GetTriggerUnit()
+                    set owner = GetTriggerPlayer()
+                    set level = GetUnitAbilityLevel(caster, ABILITY_ID)
+                    set unitX = GetUnitX(caster)
+                    set unitY = GetUnitY(caster)
+                    set targetX = GetSpellTargetX()
+                    set targetY = GetSpellTargetY()
+                    
+                    call ArrowShower.createArrow(unitX, unitY, targetX, targetY, caster, owner, level, ARROW_INITIAL)
+
+                    set caster = null
+                    set owner = null
+                endif
+            endmethod
+            
+            static method onInit takes nothing returns nothing
+                local trigger t = CreateTrigger()
+                call onPreload()
+                call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SPELL_EFFECT)
+                call TriggerAddAction(t, function thistype.onCast)
+                set t = null
+            endmethod
+        endstruct
+    endscope
+endlibrary
