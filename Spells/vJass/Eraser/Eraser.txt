@@ -1,6 +1,6 @@
 library Eraser requires DummyCaster, TreeDestruction, Preload
     //-------------------------------------------------------------------------
-    // Eraser v1.0
+    // Eraser v1.1
     // Author: Blightsower
     //
     // Description:
@@ -395,10 +395,9 @@ library Eraser requires DummyCaster, TreeDestruction, Preload
             readonly real z2
 
             real t
+            
        
             method setEndingPoint takes real x, real y, real r returns nothing
-                local location l
-                 
                 // generates the random offset for x and y
                 local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
                 local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
@@ -406,9 +405,9 @@ library Eraser requires DummyCaster, TreeDestruction, Preload
                 set .y2 = y + randomRadius * Sin(angle)
               
                 // accounts for elevation
-                set l = Location(.x2, .y2)
-                set .z2 = GetLocationZ(l)
-                call RemoveLocation(l)
+                call MoveLocation(Eraser.loc, .x2, .y2)
+                set .z2 = GetLocationZ(Eraser.loc)
+  
             endmethod
 
             method setStartingPoint takes real x, real y, real r, real h1, real h2 returns nothing
@@ -619,13 +618,12 @@ library Eraser requires DummyCaster, TreeDestruction, Preload
             private effect range
             private effect casterEffect
             private Orb orb
+            static location loc = Location(0,0)
 
             // used to adjust the elevation of the range indicator relative to the z of the target point
-            private static method adjustSfxZ takes real x, real y, real z returns real
-                local location l = Location(x, y)
-                set z = GetLocationZ(l) + z
-                call RemoveLocation(l)
-                return z
+            private static method updateSFX takes real x, real y, real z returns real
+                call MoveLocation(loc, x, y)
+                return GetLocationZ(loc) + z
             endmethod
 
             // damage calculation
@@ -761,7 +759,7 @@ library Eraser requires DummyCaster, TreeDestruction, Preload
                             // caster effects
                             set .range = AddSpecialEffect(ERASER_RANGE_MODEL, .x, .y)
                             call BlzSetSpecialEffectScale(.range, getRangeIndicatorSize(.level))
-                            call BlzSetSpecialEffectZ(.range, adjustSfxZ(.x, .y, ERASER_RANGE_HEIGHT))
+                            call BlzSetSpecialEffectZ(.range, updateSFX(.x, .y, ERASER_RANGE_HEIGHT))
                         endif
 
                         // get orb specs
