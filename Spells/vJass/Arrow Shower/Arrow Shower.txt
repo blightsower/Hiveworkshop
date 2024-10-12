@@ -1,6 +1,6 @@
 library ArrowShower requires TreeDestruction,Preload, DummyCaster 
     //---------------------------------------------------------------
-    // Arrow Shower v1.0
+    // Arrow Shower v1.1
     // Author: Blightsower
     //
     // Description - Fires an arrow that explodes into multiple arrows, 
@@ -287,7 +287,8 @@ library ArrowShower requires TreeDestruction,Preload, DummyCaster
     // START OF THE SPELL
     //-------------------------------------------------------------------------  
     scope ArrowShower
-    
+
+
         // helper modules
         module SinglyLinkedList
             thistype next
@@ -317,6 +318,7 @@ library ArrowShower requires TreeDestruction,Preload, DummyCaster
             readonly real y3
             readonly real z3
             readonly real t=0
+            private location loc = Location(0,0)	
        
             method quadraticBezier takes real t, real p1, real p2, real p3 returns real
                 return Pow((1-t),2)*p1 + 2*(1-t)*t*p2 + Pow(t,2)*p3
@@ -345,7 +347,6 @@ library ArrowShower requires TreeDestruction,Preload, DummyCaster
             endmethod
        
             method setEndingArc takes real startX, real startY, real endX, real endY, real r returns nothing
-                local location l
                 // generates the random offset for x and y
                 local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
                 local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
@@ -363,12 +364,10 @@ library ArrowShower requires TreeDestruction,Preload, DummyCaster
                 
                 // third point is the landing point of the spell
                 // account for elevation
-                set l = Location(.x2, .y2)
+                call MoveLocation(.loc, .x2, .y2)
                 set .x3 = .x2
                 set .y3 = .y2
-                set .z3 = GetLocationZ(l)
-
-                call RemoveLocation(l)
+                set .z3 = GetLocationZ(loc)
             endmethod
 
             // computes the appropriate yaw of the projectiles in radian
