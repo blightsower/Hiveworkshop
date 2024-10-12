@@ -1,6 +1,6 @@
 scope VengeanceStorm
     //---------------------------------------------------------------------
-    // Vengeance Storm v1.1
+    // Vengeance Storm v1.2
     // Author: Blightsower
     //
     // Description:
@@ -93,11 +93,7 @@ scope VengeanceStorm
         // WEAPON_MODEL - the model attached to the caster while casting the spell it
         // will disappear as soon as the circle appears
         //-------------------------------------------------------------
-        readonly static string WEAPON_MODEL = "Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile_mini.mdl"
-
-        //-------------------------------------------------------------
-        // WEAPON_ATTACHMENT - attachment point of WEAPON_MODEL
-        //-------------------------------------------------------------         
+        readonly static string WEAPON_MODEL = "Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile_mini.mdl"      
         readonly static string WEAPON_ATTACHMENT = "weapon"
 
         //-------------------------------------------------------------
@@ -138,7 +134,7 @@ scope VengeanceStorm
         // damage to every enemy within the target area. Original value is 6
         //-------------------------------------------------------------
         static method getStormCount takes integer level returns integer
-            return 1 + (2*level)
+            return 6
         endmethod
 
         //-------------------------------------------------------------
@@ -151,7 +147,7 @@ scope VengeanceStorm
 
         //-------------------------------------------------------------
         // getDelayPerStorm - returns the delay before the subsequent slashes
-        // are spawned after the initial slash. Original value .35
+        // are spawned after the initial slash. 
         //-------------------------------------------------------------
         static method getDelayPerStorm takes integer level returns real
             return .15
@@ -162,7 +158,7 @@ scope VengeanceStorm
         // Original value is 25. + (10*level)
         //-------------------------------------------------------------
         static method getAbsoluteDamage takes integer level returns real
-            return 25. + (1*level)
+            return 25. + (10*level)
         endmethod
 
         //-------------------------------------------------------------
@@ -191,16 +187,8 @@ scope VengeanceStorm
         static method getIntelligenceDamage takes integer level returns real
             return 0. + (0*level)
         endmethod
-        
-        //-------------------------------------------------------------
-        // CAN_DESTROY_TREES - true if the spell can destroy trees. 
-        // Orignal value is true
-        //-------------------------------------------------------------
-        readonly static boolean CAN_DESTROY_TREES = true
 
-        //-------------------------------------------------------------
-        // PRELOAD - true if you want the spell to preload the spell and models
-        //-------------------------------------------------------------
+        readonly static boolean CAN_DESTROY_TREES = true
         readonly static boolean PRELOAD = true
     endmodule    
 
@@ -234,22 +222,10 @@ scope VengeanceStorm
         // ATTACK_TYPE - attacktype of the spell. Original value is ATTACK_TYPE_NORMAL
         //-------------------------------------------------------------
         readonly static attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
-
-        //-------------------------------------------------------------
-        // DAMAGE_TYPE - damagetype of the spell. Original value is DAMAGE_TYPE_NORMAL
-        //-------------------------------------------------------------
         readonly static damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
-
-        //-------------------------------------------------------------
-        // WEAPON_TYPE - weapontype of the spell. Original value is null
-        //-------------------------------------------------------------
         readonly static weapontype WEAPON_TYPE = null
 
-        //-------------------------------------------------------------
-        // CAN_MINISTUN - true if the spell stuns per hit. 
-        // Orignal value is true
-        //-------------------------------------------------------------
-        readonly static boolean CAN_MINISTUN = false
+        readonly static boolean CAN_MINISTUN = true
 
         //-------------------------------------------------------------
         // getSlashModelSize - returns the size of the model used for the
@@ -410,6 +386,7 @@ scope VengeanceStorm
         real endingY
         real endingZ
         real scatterRadius
+        static location loc = Location(0, 0)
 
         // a modified version of PolarProjectionBJ(Location, Dist, Angle) to
         // mutate x by scatterRadius towards a random angle
@@ -424,12 +401,11 @@ scope VengeanceStorm
         endmethod
 
         method setEndingPoint takes real x, real y returns nothing
-            local location l
+ 
             set .endingX = generateRandomX(x)
             set .endingY = generateRandomY(y)
-            set l = Location(.endingX, .endingY)
-            set .endingZ = GetLocationZ(l)
-            call RemoveLocation(l)
+            call MoveLocation(.loc, .endingX, .endingY)
+            set .endingZ = GetLocationZ(loc)
         endmethod
 
         method setStartingPoint takes real x, real y returns nothing
@@ -627,10 +603,9 @@ scope VengeanceStorm
         private real damage
         private VengeanceSlash slash
 
-        private static method adjustSfxZ takes real x, real y, real z returns real
-            local location l = Location(x, y)
-            set z = GetLocationZ(l) + z
-            call RemoveLocation(l)
+        private static method updateSFX takes real x, real y, real z returns real
+            call MoveLocation(VengeanceSlash.loc, x, y)
+            set z = GetLocationZ(VengeanceSlash.loc) + z
             return z
         endmethod
 
@@ -689,7 +664,7 @@ scope VengeanceStorm
                         // range indicator
                         set .range = AddSpecialEffect(SLASH_RANGE_MODEL, .targetX, .targetY)
                         call BlzSetSpecialEffectScale(.range, getSlashRangeSize(.level))
-                        call BlzSetSpecialEffectZ(.range, adjustSfxZ(.targetX, .targetY, SLASH_RANGE_HEIGHT))
+                        call BlzSetSpecialEffectZ(.range, updateSFX(.targetX, .targetY, SLASH_RANGE_HEIGHT))
 
                         call DestroyEffect(.weapon)
 
