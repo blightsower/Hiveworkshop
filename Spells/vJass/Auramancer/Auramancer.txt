@@ -1,0 +1,155 @@
+library Auramancer
+//-----------------------------------------------------------------------
+// Auramancer v1.0
+// Author: Blightsower
+//
+// DESCRIPTION:
+// A buff system that assigns bonuses to a specific buff designed to work
+// with normal de/buffs and de/buffs provided by auras. 
+//
+// HOW TO USE: Just call the function below at map initialization. 
+//
+// API:
+// call AuraRegister.registerAura(BUFF_ID, ABILITY_ID)
+// 
+// Expectation from the system:
+// Whenever a unit gains the specific BUFF_ID, the system adds the ABILITY_ID
+// to the unit and removes it when the unit loses  the de/buff. ABILITY_ID will get 
+// disabled by the system when the ability is registered.
+//
+// With this approach, we avoid writing codes that calculates distances and instead
+// leverage the game's existing aura system and we only need to account for the event
+// where a unit gains or loses a de/buff
+//
+// Expectation from the users:
+// Each BUFF_ID and ABILITY_ID must be unique to prevent unwanted results and 
+// all bonuses must come in a form of spell book.
+//
+// Important Note:
+// Buffs from auras with different ids will cause the buffs of different auras to stack 
+// on the same unit just like how the implements it.
+//
+//---------------------------------------------------------------
+// Requirements:
+//  - Enable JassHelper
+//
+// How to enable JassHelper
+//  - In the Trigger Editor window, look for the menu labeled JassHelper
+//    and click Enable JassHelper
+//-------------------------------------------------------------------------
+// HOW TO IMPORT: 
+// Copy and paste Auramancer to your map
+//-----------------------------------------------------------------------
+
+    //-----------------------------------------------------------------------
+    // CONFIGURATION
+    //-----------------------------------------------------------------------
+    globals
+        private real timerInterval = 0.03 
+        private real auramancerStartDelay = 0.
+    endglobals
+    //-----------------------------------------------------------------------
+    // END OF CONFIGURATION
+    //-----------------------------------------------------------------------
+
+    module SinglyLinkedList
+        thistype next
+        thistype prev
+
+        static method insertAtHead takes thistype this returns nothing
+            set this.next = 0
+            set this.prev = thistype(0).prev
+            set thistype(0).prev.next = this
+            set thistype(0).prev = this
+        endmethod
+ 
+        static method pop takes thistype this returns nothing
+            set this.next.prev = this.prev
+            set this.prev.next = this.next
+        endmethod
+    endmodule
+
+    module Auramancer
+        implement SinglyLinkedList
+        private integer buffId
+        private integer bonusId
+        private group buffGroup = CreateGroup()
+
+        private static timer auraTimer = CreateTimer()
+        private static group g = CreateGroup()
+        private static rect r
+
+        private static method auraLoop takes nothing returns nothing
+            local unit u = null
+            local thistype this = thistype(0).next
+            local integer buffLevel
+
+            loop 
+                exitwhen this == 0
+                set g = GetUnitsInRectMatching(r, null)
+                loop
+                    set u = FirstOfGroup(g)
+                    exitwhen u == null
+
+                    set buffLevel = GetUnitAbilityLevel(u, .buffId)
+
+                    if buffLevel > 0 and not(IsUnitInGroup(u, .buffGroup)) then
+                        call UnitAddAbility(u, .bonusId)
+                        call GroupAddUnit(.buffGroup , u)
+                    endif
+
+                    if buffLevel == 0 and IsUnitInGroup(u, .buffGroup) then
+                        call UnitRemoveAbility(u, .bonusId)
+                        call GroupRemoveUnit(.buffGroup , u)
+                    endif
+
+                    call GroupRemoveUnit(g,u)
+                endloop
+
+                set this = this.next
+            endloop
+            
+        endmethod
+ 
+        private static method disableAbility takes integer a returns nothing
+            local integer i = 1
+            loop
+                exitwhen i > 24
+                call SetPlayerAbilityAvailableBJ( false, a, ConvertedPlayer(i))
+                set i = i + 1
+            endloop
+        endmethod
+
+        static method registerAura takes integer boof, integer bonus returns nothing
+            local thistype this = thistype.allocate()
+            call insertAtHead(this)
+            set .buffId = boof
+            set .bonusId = bonus
+   
+            call disableAbility(.bonusId)
+        endmethod
+         
+        static method auramancerTimerStart takes nothing returns nothing
+            set r = GetPlayableMapRect()
+            call TimerStart(auraTimer, timerInterval, true, function thistype.auraLoop)
+        endmethod
+      
+    endmodule
+ 
+    struct AuraRegister
+        implement Auramancer
+ 
+        private static method auramancerDelayedStart takes nothing returns nothing
+            call auramancerTimerStart()
+        endmethod
+
+        static method onInit takes nothing returns nothing
+            local trigger t = CreateTrigger()
+            call TriggerRegisterTimerEventSingle(t, auramancerStartDelay)
+            call TriggerAddAction(t, function thistype.auramancerDelayedStart)
+            set t = null
+        endmethod
+
+    endstruct
+
+endlibrary
