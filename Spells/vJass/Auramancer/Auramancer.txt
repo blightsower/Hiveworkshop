@@ -1,6 +1,6 @@
 library Auramancer
 //-----------------------------------------------------------------------
-// Auramancer v1.0
+// Auramancer v1.2
 // Author: Blightsower
 //
 // DESCRIPTION:
@@ -17,9 +17,10 @@ library Auramancer
 // to the unit and removes it when the unit loses  the de/buff. ABILITY_ID will get 
 // disabled by the system when the ability is registered.
 //
-// With this approach, we avoid writing codes that calculates distances and instead
-// leverage the game's existing aura system and we only need to account for the event
-// where a unit gains or loses a de/buff
+// With this approach, we avoid writing codes that calculates distances when creating custom auras 
+// and instead leverage the game's existing aura system and we only need to account for the event
+// where a unit gains or loses a de/buff.We do not care where the buff is coming from, what we care 
+// is that the unit has a buff and we are going to give it the bonuses that it needs.
 //
 // Expectation from the users:
 // Each BUFF_ID and ABILITY_ID must be unique to prevent unwanted results and 
@@ -27,7 +28,13 @@ library Auramancer
 //
 // Important Note:
 // Buffs from auras with different ids will cause the buffs of different auras to stack 
-// on the same unit just like how the implements it.
+// on the same unit just like how the game implements it.
+//
+// You will need to tune the value of the timerInterval if you intend to have a lot of buffs in your
+// map. A lower number entails that the system will immediately update the bonuses granted by your
+// registered aura at that interval times the number of other buffs registered into the system.
+// 
+// To save computing power, the system computes one buff per timer iteration as recommended by Antares.
 //
 //---------------------------------------------------------------
 // Requirements:
@@ -38,39 +45,64 @@ library Auramancer
 //    and click Enable JassHelper
 //-------------------------------------------------------------------------
 // HOW TO IMPORT: 
-// Copy and paste Auramancer to your map
+//  - Copy and paste Auramancer to your map
+// 
+// ADDITIONAL IMPORT (to guarantee that the system will not break)
+// 
+// IMPORT UNIT INDEXER (if you don't already have one in your map)
+//  - Go to the main window of the world editor then click on file-> preferences-> general then check the checkbox labeled automatically create unknown variable while pasting trigger
+//  - Copy the whole folder of Bribe's Unit Indexer
+//
 //-----------------------------------------------------------------------
 
     //-----------------------------------------------------------------------
     // CONFIGURATION
     //-----------------------------------------------------------------------
     globals
-        private real timerInterval = 0.03 
+        private real timerInterval = .1 
         private real auramancerStartDelay = 0.
     endglobals
     //-----------------------------------------------------------------------
     // END OF CONFIGURATION
     //-----------------------------------------------------------------------
 
-    module SinglyLinkedList
-        thistype next
-        thistype prev
+    private module CircularLinkedList
+        readonly thistype next
+        readonly thistype prev
 
-        static method insertAtHead takes thistype this returns nothing
-            set this.next = 0
-            set this.prev = thistype(0).prev
-            set thistype(0).prev.next = this
-            set thistype(0).prev = this
+        method init takes nothing returns thistype
+            set next = this
+            set prev = this
+
+            return this
         endmethod
- 
-        static method pop takes thistype this returns nothing
-            set this.next.prev = this.prev
-            set this.prev.next = this.next
+
+        method pushBack takes thistype node returns thistype
+            set node.prev = prev
+            set node.next = this
+            set prev.next = node
+            set prev = node
+
+            return node
+        endmethod
+
+        method pushFront takes thistype node returns thistype
+            set node.prev = this
+            set node.next = next
+            set next.prev = node
+            set next = node
+
+            return node
+        endmethod
+
+        method pop takes nothing returns nothing
+            set prev.next = next
+            set next.prev = prev
         endmethod
     endmodule
 
     module Auramancer
-        implement SinglyLinkedList
+        implement CircularLinkedList
         private integer buffId
         private integer bonusId
         private group buffGroup = CreateGroup()
@@ -78,37 +110,30 @@ library Auramancer
         private static timer auraTimer = CreateTimer()
         private static group g = CreateGroup()
         private static rect r
+        private static thistype curr = 0
+
+        private static method Check takes nothing returns boolean
+	    local unit u = GetFilterUnit()
+            local integer buffLevel
+            local thistype this = curr
+
+            if GetUnitAbilityLevel(u,.buffId) > 0 then
+                if not(IsUnitInGroup(u, .buffGroup)) then
+                    call UnitAddAbility(u, .bonusId)
+                    call GroupAddUnit(.buffGroup , u)
+                endif
+            elseif IsUnitInGroup(u, .buffGroup) then
+                call UnitRemoveAbility(u, .bonusId)
+                call GroupRemoveUnit(.buffGroup , u)
+            endif
+
+            set curr = curr.next
+
+	    return false
+        endmethod
 
         private static method auraLoop takes nothing returns nothing
-            local unit u = null
-            local thistype this = thistype(0).next
-            local integer buffLevel
-
-            loop 
-                exitwhen this == 0
-                set g = GetUnitsInRectMatching(r, null)
-                loop
-                    set u = FirstOfGroup(g)
-                    exitwhen u == null
-
-                    set buffLevel = GetUnitAbilityLevel(u, .buffId)
-
-                    if buffLevel > 0 and not(IsUnitInGroup(u, .buffGroup)) then
-                        call UnitAddAbility(u, .bonusId)
-                        call GroupAddUnit(.buffGroup , u)
-                    endif
-
-                    if buffLevel == 0 and IsUnitInGroup(u, .buffGroup) then
-                        call UnitRemoveAbility(u, .bonusId)
-                        call GroupRemoveUnit(.buffGroup , u)
-                    endif
-
-                    call GroupRemoveUnit(g,u)
-                endloop
-
-                set this = this.next
-            endloop
-            
+            call GroupEnumUnitsInRect(g, r, Filter(function AuraRegister.Check))
         endmethod
  
         private static method disableAbility takes integer a returns nothing
@@ -122,18 +147,26 @@ library Auramancer
 
         static method registerAura takes integer boof, integer bonus returns nothing
             local thistype this = thistype.allocate()
-            call insertAtHead(this)
+
             set .buffId = boof
             set .bonusId = bonus
-   
             call disableAbility(.bonusId)
+            if curr == 0 then
+            
+                call this.init()  
+                set curr = this  
+            else
+            
+                call curr.pushBack(this)  
+            endif
+
         endmethod
          
         static method auramancerTimerStart takes nothing returns nothing
-            set r = GetPlayableMapRect()
+            set .r = GetPlayableMapRect()
             call TimerStart(auraTimer, timerInterval, true, function thistype.auraLoop)
         endmethod
-      
+
     endmodule
  
     struct AuraRegister
