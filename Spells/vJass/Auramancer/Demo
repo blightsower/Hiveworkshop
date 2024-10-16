@@ -1,0 +1,11 @@
+library Demo initializer Init requires Auramancer
+    // the spell shares the same spell book. 
+    function Init takes nothing returns nothing
+        // Savage aura level 1
+        call Auramancer.register('B001', 'A004', 1)
+        // Savage aura level 2
+        call Auramancer.register('B002', 'A004', 2)
+        // Savage aura level 3
+        call Auramancer.register('B000', 'A004', 3)
+    endfunction
+endlibrary
