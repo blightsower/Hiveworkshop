@@ -148,7 +148,7 @@ library Auramancer
             endloop
         endmethod
 
-        static method registerAura takes integer boof, integer bonus returns nothing
+        static method register takes integer boof, integer bonus returns nothing
             local thistype this = thistype.allocate()
 
             set .buffId = boof
@@ -172,7 +172,7 @@ library Auramancer
 
     endmodule
  
-    struct AuraRegister
+    struct Auramancer
         implement Auramancer
  
         private static method auramancerDelayedStart takes nothing returns nothing
