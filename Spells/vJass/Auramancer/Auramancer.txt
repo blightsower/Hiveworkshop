@@ -1,40 +1,32 @@
 library Auramancer
 //-----------------------------------------------------------------------
-// Auramancer v1.2
+// Auramancer v1.3
 // Author: Blightsower
 //
 // DESCRIPTION:
-// A buff system that assigns bonuses to a specific buff designed to work
-// with normal de/buffs and de/buffs provided by auras. 
+// A system that assigns bonuses (in the form of spell books) to any specific de/buff.
+// Works with de/buffs obtained from anywhere including auras.
 //
-// HOW TO USE: Just call the function below at map initialization. 
+// HOW TO USE: 
+// Call the function below at map initialization. 
 //
 // API:
-// call AuraRegister.registerAura(BUFF_ID, ABILITY_ID)
+// call Auramancer.register(BUFF_ID, ABILITY_ID, AURA_LEVEL)
 // 
 // Expectation from the system:
-// Whenever a unit gains the specific BUFF_ID, the system adds the ABILITY_ID
-// to the unit and removes it when the unit loses  the de/buff. ABILITY_ID will get 
-// disabled by the system when the ability is registered.
-//
-// With this approach, we avoid writing codes that calculates distances when creating custom auras 
-// and instead leverage the game's existing aura system and we only need to account for the event
-// where a unit gains or loses a de/buff.We do not care where the buff is coming from, what we care 
-// is that the unit has a buff and we are going to give it the bonuses that it needs.
+// The system accepts a pair of BUFF_ID and ABILITY_ID.
+// Whenever a unit gains the BUFF_ID you registered, the system applies the 
+// appropriate ABILITY_ID and AURA_LEVEL to the unit. Should a moment arise
+// where the unit obtains two BUFF_ID's that shares the same ABILITY_ID, the
+// ABILITY_ID with the higher AURA_LEVEL gets applied to the unit.
 //
 // Expectation from the users:
-// Each BUFF_ID and ABILITY_ID must be unique to prevent unwanted results and 
-// all bonuses must come in a form of spell book.
+// The user is expected to call AuraRegister.registerAura(BUFF_ID, ABILITY_ID, AURA_LEVEL)
+// at map initialization either through GUI or vJass initialization.
 //
-// Important Note:
-// Buffs from auras with different ids will cause the buffs of different auras to stack 
-// on the same unit just like how the game implements it.
-//
-// You will need to tune the value of the timerInterval if you intend to have a lot of buffs in your
-// map. A lower number entails that the system will immediately update the bonuses granted by your
-// registered aura at that interval times the number of other buffs registered into the system.
-// 
-// To save computing power, the system computes one buff per timer iteration as recommended by Antares.
+// If the user's BUFF_ID supports multiple levels, the user must declare each BUFF_ID for each 
+// level.BUFF_ID with multiple levels can share the same spell book. The user must specify
+// the AURA_LEVEL. ABILITY_ID must support the levels defined by AURA_LEVEL.
 //
 //---------------------------------------------------------------
 // Requirements:
@@ -46,20 +38,16 @@ library Auramancer
 //-------------------------------------------------------------------------
 // HOW TO IMPORT: 
 //  - Copy and paste Auramancer to your map
-// 
-// ADDITIONAL IMPORT (to guarantee that the system will not break)
-// 
-// IMPORT UNIT INDEXER (if you don't already have one in your map)
-//  - Go to the main window of the world editor then click on file-> preferences-> general then check the checkbox labeled automatically create unknown variable while pasting trigger
-//  - Copy the whole folder of Bribe's Unit Indexer
-//
+//-----------------------------------------------------------------------
+// SPECIAL THANKS
+// Antares
 //-----------------------------------------------------------------------
 
     //-----------------------------------------------------------------------
     // CONFIGURATION
     //-----------------------------------------------------------------------
     globals
-        private real timerInterval = .1 
+        private real timerInterval = .03 
         private real auramancerStartDelay = 0.
     endglobals
     //-----------------------------------------------------------------------
@@ -105,6 +93,7 @@ library Auramancer
         implement CircularLinkedList
         private integer buffId
         private integer bonusId
+        private integer auraLevel
         private group buffGroup = CreateGroup()
 
         private static timer auraTimer = CreateTimer()
@@ -112,33 +101,51 @@ library Auramancer
         private static rect r
         private static thistype curr = 0
 
-        private static method auraLoop takes nothing returns nothing
-            
-            local thistype this = curr 
-            local unit u
-            local integer buffLevel
-            set g = GetUnitsInRectMatching(r, null)
-            loop 
-                set u = FirstOfGroup(g)
-                exitwhen u == null
-                set buffLevel = GetUnitAbilityLevel(u, .buffId)
-                if buffLevel > 0 then 
-                    if not(IsUnitInGroup(u, .buffGroup)) then
-          
-                        call UnitAddAbility(u, .bonusId)
-                        call GroupAddUnit(.buffGroup , u)
-                    endif
-                elseif IsUnitInGroup(u, .buffGroup) then
-                    
-	            call UnitRemoveAbility(u, .bonusId)
-                    call GroupRemoveUnit(.buffGroup , u)
-                endif
-                call GroupRemoveUnit(g,u)
-            endloop
-            set curr = curr.next
+        private static method Check takes nothing returns boolean
+            local unit u = GetFilterUnit()
+            local thistype this = curr
+            local integer bonusLevel 
 
+            if GetUnitAbilityLevel(u, .buffId) > 0 then                         
+                if not(IsUnitInGroup(u, .buffGroup)) then
+                    // when unit is first added to the group, its ability level will match the
+                    // aura level   
+                    if GetUnitAbilityLevel(u, .bonusId) == 0 then                                     
+                        call UnitAddAbility(u, .bonusId)
+                    endif                                                       
+                    call SetUnitAbilityLevel(u, .bonusId, .auraLevel)  
+                    call GroupAddUnit(.buffGroup , u)
+                else
+                    // only happens when the unit is already in the group but the system
+                    // is unsure if the unit has the correct level of bonuses applied
+                    set bonusLevel = GetUnitAbilityLevel(u, .bonusId)
+                    if bonusLevel == 0 then
+                        call UnitAddAbility(u, .bonusId)
+                        call SetUnitAbilityLevel(u, .bonusId, .auraLevel)  
+                    else
+                        if bonusLevel < .auraLevel then
+                            call SetUnitAbilityLevel(u, .bonusId, .auraLevel)   
+                        else
+                            call SetUnitAbilityLevel(u, .bonusId, bonusLevel)   
+                        endif
+                    endif
+                endif
+            // unit is expelled from the group and bonuses revoked when it no longer bears the buff
+            elseif IsUnitInGroup(u, .buffGroup) then                            
+                call UnitRemoveAbility(u, .bonusId)
+                call GroupRemoveUnit(.buffGroup , u)
+            endif
+
+            call GroupRemoveUnit(g,u)
+            
+            return false
         endmethod
- 
+
+        private static method auraLoop takes nothing returns nothing
+            call GroupEnumUnitsInRect(g, r, Filter(function Auramancer.Check))
+            set curr = curr.next
+        endmethod
+
         private static method disableAbility takes integer a returns nothing
             local integer i = 1
             loop
@@ -148,18 +155,19 @@ library Auramancer
             endloop
         endmethod
 
-        static method register takes integer boof, integer bonus returns nothing
+        static method register takes integer boof, integer bonus, integer level returns nothing
             local thistype this = thistype.allocate()
 
             set .buffId = boof
             set .bonusId = bonus
+            set .auraLevel = level
             call disableAbility(.bonusId)
+
             if curr == 0 then
-            
                 call this.init()  
                 set curr = this  
             else
-            
+
                 call curr.pushBack(this)  
             endif
 
