@@ -112,28 +112,31 @@ library Auramancer
         private static rect r
         private static thistype curr = 0
 
-        private static method Check takes nothing returns boolean
-	    local unit u = GetFilterUnit()
+        private static method auraLoop takes nothing returns nothing
+            
+            local thistype this = curr 
+            local unit u
             local integer buffLevel
-            local thistype this = curr
-
-            if GetUnitAbilityLevel(u,.buffId) > 0 then
-                if not(IsUnitInGroup(u, .buffGroup)) then
-                    call UnitAddAbility(u, .bonusId)
-                    call GroupAddUnit(.buffGroup , u)
+            set g = GetUnitsInRectMatching(r, null)
+            loop 
+                set u = FirstOfGroup(g)
+                exitwhen u == null
+                set buffLevel = GetUnitAbilityLevel(u, .buffId)
+                if buffLevel > 0 then 
+                    if not(IsUnitInGroup(u, .buffGroup)) then
+          
+                        call UnitAddAbility(u, .bonusId)
+                        call GroupAddUnit(.buffGroup , u)
+                    endif
+                elseif IsUnitInGroup(u, .buffGroup) then
+                    
+	            call UnitRemoveAbility(u, .bonusId)
+                    call GroupRemoveUnit(.buffGroup , u)
                 endif
-            elseif IsUnitInGroup(u, .buffGroup) then
-                call UnitRemoveAbility(u, .bonusId)
-                call GroupRemoveUnit(.buffGroup , u)
-            endif
-
+                call GroupRemoveUnit(g,u)
+            endloop
             set curr = curr.next
 
-	    return false
-        endmethod
-
-        private static method auraLoop takes nothing returns nothing
-            call GroupEnumUnitsInRect(g, r, Filter(function AuraRegister.Check))
         endmethod
  
         private static method disableAbility takes integer a returns nothing
