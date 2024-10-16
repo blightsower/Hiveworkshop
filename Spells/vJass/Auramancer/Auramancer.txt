@@ -21,7 +21,7 @@ library Auramancer
 // ABILITY_ID with the higher AURA_LEVEL gets applied to the unit.
 //
 // Expectation from the users:
-// The user is expected to call AuraRegister.registerAura(BUFF_ID, ABILITY_ID, AURA_LEVEL)
+// The user is expected to call Auramancer.register(BUFF_ID, ABILITY_ID, AURA_LEVEL)
 // at map initialization either through GUI or vJass initialization.
 //
 // If the user's BUFF_ID supports multiple levels, the user must declare each BUFF_ID for each 
