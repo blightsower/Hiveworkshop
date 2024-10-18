@@ -1,0 +1,517 @@
+library SmokeScreen requires Auramancer, TreeDestruction, DummyCaster, Preload
+    //---------------------------------------------------------------
+    // Smoke Screen v1.0
+    // Author: Blightsower
+    //
+    // Description - Throws a smoke grenade at the target location dealing
+    // minor damage to nearby enemy units and inflicts a short stun. Smoke 
+    // quickly forms at the target location which causes all affected enemy
+    // units to have reduced armor. The caster gains invisibility, evasion,
+    // critical, and damage for as long as it remains in the smoke. Attacking
+    // or casting spells does not break invisibility
+    //
+    // The bonuses that you can apply on both ally and enemy affected by the
+    // spell is up to you. For this test map, im adding the "ghost" ability
+    // to maintain invisibility when attacking or casting while inside the smoke.
+    // You can choose to get rid of the invisibility all together using the object
+    // editor or you can choose to add permanent invisibility while inside the 
+    // smoke to reveal units who are casting or attacking inside the smoke. Additionally
+    // you can apply your own bonuses for the caster and enemies within the smoke
+    // using the object editor.
+    //---------------------------------------------------------------
+    // Requirements:
+    //  * Enable JassHelper
+    //
+    // How to enable JassHelper
+    //  * In the Trigger Editor window, look for the menu labeled JassHelper
+    //    and click Enable JassHelper
+    //-------------------------------------------------------------------------
+    // How to Import:
+    // 1. Copy and paste the objects from this map to your map
+    //  * There are a ton of objects within this map due to the nature of the spell
+    //    which affects both allies and enemies.
+    //  * The important objects that you need to import to have it work successfully
+    //    in your map are the following:
+    //     - Smoke Screen - Hero Ability
+    //     - Smoke Screen - (Ally)
+    //     - Smoke Screen - (Enemy)
+    //     - Smoke Screen - Bonus (Ally)
+    //     - Smoke Screen - Bonus (Enemy)
+    //     - Dummy Caster
+    //  * The rest are optional or can be turned off
+    // 2. Copy and paste the Smoke Screen Category into your map
+    // 3. Configure the spell so that everything points to the correct
+    //    variables. Additional information about the variables are
+    //    provided for clarity.
+    //-------------------------------------------------------------------------
+    // Note:
+    // This spell includes some optional libraries to handle tree destruction, dummy casting
+    // and preloading. The spell is arranged so that you can easily get rid of those libraries without
+    // going into the code. You might want to get rid of those libraries if you already have a system
+    // that handles those functionalities or you just feel like writing your own. Should you choose to keep
+    // the libraries, there are a few things that you need to configure to fit your needs. Check the libraries
+    // individually to have the variables point to the correct objects.
+    //
+    // How to remove optional libraries:
+    // To remove DummyCaster:
+    //     Remove DummyCaster from the requires and delete whats inside the onDummyCast function found
+    //     at the bottom of configurables. Delete DummyCaster script
+    // To remove TreeDestruction:
+    //     Remove TreeDestrcution from the requires and delete whats inside the onDestroyTree
+    //     function found at the bottom of configurables. Delete TreeDestruction script
+    // To remove Preload:
+    //     Remove Preload from the requires and delete whats inside the onPreload function found
+    //     at the bottom of configurables. Delete Preload script
+    //
+    // It also includes one required library which is Auramancer. It handles the logic of the buffs
+    // emitted by the spell for both ally and enemy units.
+    //-------------------------------------------------------------------------
+   
+    //-------------------------------------------------------------------------
+    // CONFIGURABLES
+    //-------------------------------------------------------------------------
+    globals
+        //-------------------------------------------------------------------------
+        // TIMER SPEED - usually you dont touch it. It is the interval which the spell
+        // uses to update the arrows
+        //-------------------------------------------------------------------------
+        private constant real TIMER_SPEED = 0.03
+    endglobals
+
+    native UnitAlive takes unit id returns boolean
+    module SmokeScreenConfiguration
+
+        //-------------------------------------------------------------------------
+        // Object Editor Data
+        //-------------------------------------------------------------------------
+
+        // Main ability - must point to Smoke Screen - Hero Ability
+        readonly static constant integer ABILITY_ID = 'A000'
+        
+        // Unit type of the dummy caster - must point to dummy caster
+        readonly static constant integer CHANNELER_TYPE = 'h000'
+
+        // Must point to Smoke Screen - (Ally)
+        readonly static constant integer CHANNELED_ABILITY_ALLY = 'A001'
+
+        // Must point to Smoke Screen - (Enemy)
+        readonly static constant integer CHANNELED_ABILITY_ENEMY = 'A002'
+        readonly static constant integer CHANNELER_ORDER = 852473
+
+        //-------------------------------------------------------------------------
+        // Model and Size
+        //-------------------------------------------------------------------------
+
+        // Projectile
+        readonly static constant string PROJECTILE_MODEL = "Abilities\\Spells\\Other\\AcidBomb\\BottleMissile.mdl"
+        static constant method getProjectileModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        // Smoke
+        readonly static constant string SMOKE_MODEL = "Abilities\\Spells\\Human\\CloudOfFog\\CloudOfFog.mdl"
+        static constant method getSmokeModelSize takes integer level returns real
+            return 1.5
+        endmethod
+
+        // Hit model
+        readonly static constant string HIT_MODEL = "Abilities\\Spells\\Other\\Cleave\\CleaveDamageTarget.mdl"
+        readonly static constant string HIT_ATTACHMENT = "chest"
+        static constant method getHitModelSize takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // DAMAGE
+        // Hint:
+        // 1.0 = 100% of the attribute
+        //-------------------------------------------------------------
+        readonly static attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
+        readonly static damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
+        readonly static weapontype WEAPON_TYPE = null
+        static constant method getAbsoluteDamage takes integer level returns real
+            return 0.
+        endmethod
+        static constant method getStrengthDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod
+        static constant method getAgilityDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod
+        static constant method getIntelligenceDamage takes integer level returns real
+            return 0. + (0*level)
+        endmethod       
+
+        //-------------------------------------------------------------------------
+        // Behavior
+        //-------------------------------------------------------------------------
+
+        // starting height of the projectile
+        readonly static constant real STARTING_HEIGHT = 50.
+
+        // max height of the projectile
+        static constant method getMaxHeight takes integer level returns real
+            return 250.
+        endmethod
+
+        // the delay between launching and projectile hitting the ground
+        static constant method getProjectileDuration takes integer level returns real
+            return .25
+        endmethod
+
+        // controls the duration of the smoke
+        static constant method getChannelDuration takes integer level returns real
+            return 10.
+        endmethod
+
+        // area of effect of the spell, only affects the initial damage of the spell.
+        // the area of effect that applies the buff/debuff to ally/enemies can be configured
+        // using object editor
+        static constant method getAoe takes integer level returns real
+            return 300.
+        endmethod
+
+        //-------------------------------------------------------------
+        // API
+        //-------------------------------------------------------------
+
+        // damage filter of the spell, only affects the initial damage of the spell.
+        // you can configure which units are affected by each smoke using the object editor
+        // unit u - is the unit in question
+        // player p - is the owner of the spell
+        // Original Conditions:
+        //  - u is alive
+        //  - u is not a structure
+        //  - u is not magic immune
+        //  - u is is an enemy of player p
+        static method isSmokeable takes unit u, player p returns boolean
+            return UnitAlive(u) and not(IsUnitType(u, UNIT_TYPE_STRUCTURE)) and not(IsUnitType(u, UNIT_TYPE_MAGIC_IMMUNE)) and IsUnitEnemy(u,p)
+        endmethod
+
+
+        // onDamage - is the damage event of the spell.
+        // unit caster - is the caster of the spell
+        // unit target - is the enemy about to get damaged by the spell
+        // real damage - is the amount of damage about to be dealt
+        // attacktype attackType - attacktype of the spell
+        // damagetype damageType - damagetype of the spell
+        // weapontype weaponType - weapontype of the spell
+        static method onDamage takes unit caster, unit target, real damage, attacktype attackType, damagetype damageType, weapontype weaponType returns nothing
+            call UnitDamageTarget(caster, target, damage, true, false, attackType, damageType, weaponType)
+        endmethod
+
+        // tree destruction
+        // onDestroyTree - function called by the spell when destroying trees
+        // (x, y) - landing point of the arrows
+        // aoe - radius of the destruction
+        // uses the ClearTrees function from the optional library
+        readonly static constant boolean DESTROYS_TREES = true
+        static method onDestroyTree takes real x, real y, real aoe returns nothing
+            call ClearTrees(x, y, aoe)
+        endmethod
+
+        // onDummyCast - is the ministun event of the spell
+        // unit u - target of the ministun
+        // integer l - level of the ministun
+        // uses the OrderCaster function from the optional library
+        readonly static constant boolean USES_DUMMY_CASTER = true
+        readonly static constant integer DUMMY_ABILITY_ID = 'A003'    
+        readonly static constant integer DUMMY_ABILITY_ORDER = 852095 
+        static method onDummyCast takes unit u, integer l returns nothing
+            call OrderCaster(u, l, DUMMY_ABILITY_ID, DUMMY_ABILITY_ORDER)
+        endmethod
+
+        // onPreload - runs at map initialization
+        // uses the preload function from the optional library
+        static method onPreload takes nothing returns nothing
+            // Auramancer setup
+            // Auramancer Register API
+            // call Auramancer.register(BUFF_ID, BONUS_ABILITY_ID, LEVEL)
+            // ability points to Smoke Sreen - Bonus (Ally)
+            call Auramancer.register('B000', 'A004', 1) // buff points to Smoke Screen - Ally (Level 1)
+            call Auramancer.register('B001', 'A004', 2) // buff points to Smoke Screen - Ally (Level 2)
+            call Auramancer.register('B002', 'A004', 3) // buff points to Smoke Screen - Ally (Level 3)
+            // ability points to Smoke Sreen - Bonus (Enemy)
+            call Auramancer.register('B003', 'A005', 1) // buff points to Smoke Screen - Enemy (Level 1)
+            call Auramancer.register('B004', 'A005', 2) // buff points to Smoke Screen - Enemy (Level 2)
+            call Auramancer.register('B005', 'A005', 3) // buff points to Smoke Screen - Enemy (Level 3)
+
+            // preload section
+            call Initialize.preloadAbility(ABILITY_ID)
+            call Initialize.preloadAbility(DUMMY_ABILITY_ID)
+            call Initialize.preloadAbility(CHANNELED_ABILITY_ALLY)
+            call Initialize.preloadAbility(CHANNELED_ABILITY_ENEMY)
+
+            call Initialize.preloadEffect(PROJECTILE_MODEL)
+            call Initialize.preloadEffect(SMOKE_MODEL)
+            call Initialize.preloadEffect(HIT_MODEL)
+        endmethod
+
+    endmodule
+    //-------------------------------------------------------------------------
+    // END OF CONFIGURABLES
+    //-------------------------------------------------------------------------
+
+    scope SmokeScreen
+
+        module SinglyLinkedList
+            thistype next
+            thistype prev
+
+            static method insertAtHead takes thistype this returns nothing
+                set this.next = 0
+                set this.prev = thistype(0).prev
+                set thistype(0).prev.next = this
+                set thistype(0).prev = this
+            endmethod
+ 
+            static method pop takes thistype this returns nothing
+                set this.next.prev = this.prev
+                set this.prev.next = this.next
+            endmethod
+        endmodule
+
+        // module used for casting the smoke for both ally
+        // and enemy cloud
+        module Channeler
+            static method createChanneler takes real x, real y, player p returns unit
+                return CreateUnit(p, CHANNELER_TYPE, x, y, 0)
+            endmethod
+            static method orderChanneler takes unit u, real x, real y, integer level, integer a, integer o returns nothing
+                call SetUnitX(u, x)
+                call SetUnitY(u, y)
+                call UnitAddAbility(u, a)
+                call SetUnitAbilityLevel(u, a, level)
+                call IssuePointOrderById(u,o,x,y)
+            endmethod
+        endmodule
+
+        module Transformer
+            readonly real x1
+            readonly real y1
+            readonly real z1
+            readonly real x2
+            readonly real y2
+            readonly real z2
+            readonly real x3
+            readonly real y3
+            readonly real z3
+            readonly real t=0
+            static location loc = Location(0,0)   
+      
+            method quadraticBezier takes real t, real p1, real p2, real p3 returns real
+                return Pow((1-t),2)*p1 + 2*(1-t)*t*p2 + Pow(t,2)*p3
+            endmethod
+
+            method lerp takes real a, real b, real t returns real
+                return a + (b - a) * t
+            endmethod
+
+            method calculateArc takes real startX, real startY, real endX, real endY returns nothing
+                // position of the caster
+                set .x1 = startX
+                set .y1 = startY
+                set .z1 = STARTING_HEIGHT
+
+                // middle point
+                set .x2 = lerp(startX, endX, .5)
+                set .y2 = lerp(startY, endY, .5)
+                set .z2 = getMaxHeight(.level)
+
+                // ending point
+                call MoveLocation(.loc, endX, endY)
+                set .x3 = endX
+                set .y3 = endY
+                set .z3 = GetLocationZ(loc)
+            endmethod
+        endmodule
+
+        struct SmokeScreen
+            implement SmokeScreenConfiguration
+            implement SinglyLinkedList
+            implement Transformer
+            implement Channeler
+ 
+            private static group g = CreateGroup()
+            private static timer smokeTimer = CreateTimer()
+            private static integer index = 0
+
+            private real targetX
+            private real targetY
+            private real aoe
+            private real damage
+            private unit caster
+            private player owner
+            private integer level
+            private real projectileDuration
+            private effect smoke
+            private boolean hasChanneler
+            private real channelTimeLeft
+            private unit allyChanneler
+            private unit enemyChanneler
+
+            // damage calculation
+            private static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
+                local real damage_agi = I2R(GetHeroStatBJ(bj_HEROSTAT_AGI, u, true)) * a
+                local real damage_str = I2R(GetHeroStatBJ(bj_HEROSTAT_STR, u, true)) * s
+                local real damage_int = I2R(GetHeroStatBJ(bj_HEROSTAT_INT, u, true)) * i
+                return damage_agi + damage_str + damage_int
+            endmethod
+
+            private method clear takes nothing returns nothing
+                call this.deallocate()
+                call pop(this)
+               
+                set .caster = null
+                set .owner = null
+                set .allyChanneler = null
+                set .enemyChanneler = null
+
+                set index = index - 1
+                if index == 0 then
+                    call PauseTimer(smokeTimer)
+                endif
+            endmethod
+
+            private method update takes nothing returns boolean
+                // positionof the projectile
+                local real x = quadraticBezier(.t, .x1, .x2, .x3)
+                local real y = quadraticBezier(.t, .y1, .y2, .y3)
+                local real z = quadraticBezier(.t, .z1, .z2, .z3)
+                              
+                call BlzSetSpecialEffectX(.smoke, x)
+                call BlzSetSpecialEffectY(.smoke, y)
+                call BlzSetSpecialEffectZ(.smoke, z)
+               
+                set .t = .t + 1/(.projectileDuration/TIMER_SPEED)
+                return .t > 1.
+            endmethod
+
+            private static method onEffect takes nothing returns nothing
+                local thistype this = thistype(0).next
+                local effect e
+                local unit u
+
+                loop
+                    exitwhen this == 0
+                        if .hasChanneler then
+                            if .channelTimeLeft > 0 then
+                                set .channelTimeLeft = .channelTimeLeft - TIMER_SPEED
+                            else   
+                                call DestroyEffect(.smoke)
+                                call RemoveUnit(allyChanneler)
+                                call RemoveUnit(enemyChanneler)
+                                call clear()
+                            endif
+                        else
+                            if update() then
+
+                                call DestroyEffect(.smoke)
+                                set .hasChanneler = true
+                                set .channelTimeLeft = getChannelDuration(.level)
+                                set .smoke = AddSpecialEffect(SMOKE_MODEL, .targetX, .targetY)
+                                call BlzSetSpecialEffectScale(.smoke, getSmokeModelSize(.level))
+                                call MoveLocation(.loc, .targetX, .targetY)
+                                call BlzSetSpecialEffectZ(.smoke, GetLocationZ(.loc))
+                                
+                                // order dummy casters to channel cloud
+                                set allyChanneler = createChanneler(.targetX, targetY, .owner)
+                                set enemyChanneler = createChanneler(.targetX, targetY, .owner)
+                                call orderChanneler(allyChanneler, .targetX, .targetY, .level, .CHANNELED_ABILITY_ALLY, CHANNELER_ORDER)
+                                call orderChanneler(enemyChanneler, .targetX, .targetY, .level, .CHANNELED_ABILITY_ENEMY, CHANNELER_ORDER)
+
+                                set .damage = getAbsoluteDamage(.level) + getDamageFromAttribute(.caster, getStrengthDamage(.level), getAgilityDamage(.level), getIntelligenceDamage(.level))
+
+                                if DESTROYS_TREES then
+                                    call onDestroyTree(.targetX, .targetY, .getAoe(.level))
+                                endif
+
+                                call GroupEnumUnitsInRange(g, .targetX, .targetY, .getAoe(.level), null)
+                                loop
+                                    set u = FirstOfGroup(g)
+                                    exitwhen u == null
+                                   
+                                    if isSmokeable(u, .owner) then   
+ 
+                                        // hit special effects
+                                        set e = AddSpecialEffectTarget(HIT_MODEL, u, HIT_ATTACHMENT)
+                                        call BlzSetSpecialEffectScale(e, getHitModelSize(.level))
+                                        call DestroyEffect(e)
+                                     
+                                        // damage
+                                        call onDamage(.caster, u, .damage, ATTACK_TYPE, DAMAGE_TYPE, WEAPON_TYPE)
+               
+                                        // dummy caster
+                                        if USES_DUMMY_CASTER then
+                                            call onDummyCast(u, .level)
+                                        endif
+                                    endif
+                                   
+                                    call GroupRemoveUnit(g,u)
+                                endloop
+                            endif
+                        endif
+                        
+                    set this = this.next
+                endloop
+            endmethod
+
+            private static method createSmoke takes real sourceX, real sourceY, real targetX, real targetY, unit caster, player owner, integer level returns nothing
+                local thistype this = thistype.allocate()
+                call insertAtHead(this)
+                call calculateArc(sourceX, sourceY, targetX, targetY)
+
+                set .targetX = targetX
+                set .targetY = targetY
+                set .caster = caster
+                set .owner = owner
+                set .level = level
+                set .aoe = getAoe(.level)
+                set .projectileDuration =  getProjectileDuration(.level)
+                set .smoke = AddSpecialEffect(PROJECTILE_MODEL, sourceX, sourceY)
+                set .hasChanneler = false                
+                call BlzSetSpecialEffectScale(.smoke, getProjectileModelSize(.level))
+
+                set index = index + 1
+                if index == 1 then
+                    call TimerStart(smokeTimer, TIMER_SPEED, true, function thistype.onEffect)
+                endif
+            endmethod
+
+            private static method onCast takes nothing returns nothing
+                local real unitX
+                local real unitY
+                local real targetX
+                local real targetY
+                local unit caster
+                local player owner
+                local integer level
+
+                if GetSpellAbilityId() == ABILITY_ID then
+                   
+                    set caster = GetTriggerUnit()
+                    set owner = GetTriggerPlayer()
+                    set level = GetUnitAbilityLevel(caster, ABILITY_ID)
+                    set unitX = GetUnitX(caster)
+                    set unitY = GetUnitY(caster)
+                    set targetX = GetSpellTargetX()
+                    set targetY = GetSpellTargetY()
+                   
+                    call createSmoke(unitX, unitY, targetX, targetY, caster, owner, level)
+
+                    set caster = null
+                    set owner = null
+                endif
+
+            endmethod
+
+            static method onInit takes nothing returns nothing
+                local trigger t = CreateTrigger()
+                call onPreload()
+                call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SPELL_EFFECT)
+                call TriggerAddAction(t, function thistype.onCast)
+                set t = null
+            endmethod
+        endstruct
+    endscope
+endlibrary
