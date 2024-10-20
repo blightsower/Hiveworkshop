@@ -1,0 +1,12 @@
+module Channeler
+  static method createChanneler takes real x, real y, player p returns unit
+    return CreateUnit(p, CHANNELER_TYPE, x, y, 0)
+  endmethod
+  static method orderChanneler takes unit u, real x, real y, integer level, integer a, integer o returns nothing
+    call SetUnitX(u, x)
+    call SetUnitY(u, y)
+    call UnitAddAbility(u, a)
+    call SetUnitAbilityLevel(u, a, level)
+    call IssuePointOrderById(u,o,x,y)
+  endmethod
+endmodule
