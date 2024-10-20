@@ -1,0 +1,94 @@
+library ReviveSystem
+    globals
+        private constant real TIMER_SPEED = 0.03
+    endglobals
+
+    module ReviveSystemConfiguration
+        readonly static constant real X = -2080.
+        readonly static constant real Y = 2080.
+        readonly static constant real AOE = 200.
+        readonly static constant real BASE_REVIVE_TIME = 30.
+    endmodule
+
+    struct ReviveSystem
+        implement ReviveSystemConfiguration
+        implement SinglyLinkedList
+        private static timer reviveTimer = CreateTimer()
+        private static integer index = 0
+        private static location reviveLocation = Location(0,0)
+        private unit revivingUnit
+        private real reviveTimeLeft
+        private player owner
+        private timerdialog timerWindow
+
+        private static method getRandomX takes real x, real r returns real
+            local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+            local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+
+            return x + randomRadius * Cos(angle)
+        endmethod
+
+        private static method getRandomY takes real y, real r returns real
+            local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+            local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+
+            return y + randomRadius * Sin(angle)
+        endmethod
+
+        private method onRevive takes nothing returns nothing
+            call this.deallocate()
+            call pop(this)
+            call ReviveHero(.revivingUnit, .getRandomX(.X, .AOE), .getRandomY(.Y, .AOE), true)
+            call PanCameraToTimedForPlayer(.owner, .X, .Y, 0.)
+            call DestroyTimerDialog(.timerWindow)
+            set .owner = null
+            set .revivingUnit = null
+            set index = index - 1
+            if index == 0 then
+                call PauseTimer(reviveTimer)
+            endif
+        endmethod
+
+        private static method onCountdown takes nothing returns nothing
+            local thistype this = thistype(0).next
+            loop 
+                exitwhen this == 0
+                if .reviveTimeLeft > 0 then
+                    set .reviveTimeLeft = .reviveTimeLeft - TIMER_SPEED
+                else                     
+                    call .onRevive() 
+                endif
+                set this = this.next
+            endloop
+        endmethod
+
+        private static method onDeath takes nothing returns nothing
+            local thistype this
+            local unit u = GetTriggerUnit()
+            if IsUnitType(u, UNIT_TYPE_HERO) and IsUnitAlly(u, Player(0)) then
+                set this = thistype.allocate()
+                call insertAtHead(this)
+                set .revivingUnit = u
+                set .reviveTimeLeft = BASE_REVIVE_TIME
+                set .owner = GetTriggerPlayer()
+                set .timerWindow = CreateTimerDialog(.reviveTimer)
+                call TimerDialogSetTitle(.timerWindow, GetUnitName(.revivingUnit))
+                call TimerDialogDisplay(.timerWindow, true)
+                call TimerDialogSetRealTimeRemaining(.timerWindow, .reviveTimeLeft)
+                set index = index + 1
+                if index == 1 then
+                    call TimerStart(reviveTimer, TIMER_SPEED, true, function thistype.onCountdown)
+                endif
+                set u = null
+            endif
+        endmethod
+
+        static method onInit takes nothing returns nothing
+            local trigger t = CreateTrigger()
+            call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_DEATH)
+            call TriggerAddAction(t, function thistype.onDeath)
+            set t = null
+        endmethod
+    endstruct
+
+endlibrary
