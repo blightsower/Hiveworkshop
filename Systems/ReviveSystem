@@ -13,9 +13,10 @@ library ReviveSystem
     struct ReviveSystem
         implement ReviveSystemConfiguration
         implement SinglyLinkedList
+        implement Globals
+
         private static timer reviveTimer = CreateTimer()
         private static integer index = 0
-        private static location reviveLocation = Location(0,0)
         private unit revivingUnit
         private real reviveTimeLeft
         private player owner
