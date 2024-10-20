@@ -1,0 +1,25 @@
+library TeamLife
+    globals
+        private real teamLifeDelay = 0.
+        private integer remainingLife = 20
+        private player owner = Player(0)
+    endglobals
+    struct TeamLife
+        private static leaderboard teamLifeBoard
+
+        private static method showTeamLife takes nothing returns nothing
+            set .teamLifeBoard = CreateLeaderboardBJ(GetPlayersAll(), "Team Life" )
+            call LeaderboardAddItem(.teamLifeBoard, "Remaining Life: ", remainingLife, owner)
+            call LeaderboardDisplay(.teamLifeBoard, true)
+            call LeaderboardSetSizeByItemCount(.teamLifeBoard, 1)
+            call BJDebugMsg("lb check")
+        endmethod
+
+        static method onInit takes nothing returns nothing
+            local trigger t = CreateTrigger()
+            call TriggerRegisterTimerEventSingle(t, teamLifeDelay)
+            call TriggerAddAction(t, function thistype.showTeamLife)
+            set t = null
+        endmethod
+    endstruct
+endlibrary
