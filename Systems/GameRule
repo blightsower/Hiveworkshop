@@ -1,0 +1,14 @@
+library MapConfiguration initializer OnInit
+
+    private function OnInit takes nothing returns nothing
+        local integer i = 0
+        call BlzShowTerrain(true)
+        call FogMaskEnableOff()
+        loop
+            exitwhen i > Globals.PLAYER_COUNT
+            call SetPlayerAllianceStateBJ(Globals.ALLY_PLAYER, Player(i), bj_ALLIANCE_ALLIED_VISION)
+            call SetPlayerAllianceStateBJ(Player(i), Globals.ALLY_PLAYER, bj_ALLIANCE_ALLIED_VISION)
+            set i = i + 1
+        endloop
+    endfunction
+endlibrary
