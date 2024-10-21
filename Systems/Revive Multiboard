@@ -5,20 +5,18 @@ library ReviveMultiboard initializer OnInit
         private integer multiboardIndex = 0
     endglobals
 
-    function addUnitToMultiboard takes string name returns nothing
+    function addUnitToMultiboard takes nothing returns nothing
         local multiboarditem mbItem = null
         set multiboardIndex = multiboardIndex + 1        
         call MultiboardSetRowCount(mb, multiboardIndex)
         set mbItem = MultiboardGetItem(mb, multiboardIndex - 1, 0)
 
-        call MultiboardSetItemValue(mbItem, name)
         call MultiboardSetItemStyle(mbItem, true, false)
         call MultiboardSetItemWidth(mbItem, 12./100)
         call MultiboardReleaseItem(mbItem)
         set mbItem = null
 
         set mbItem = MultiboardGetItem(mb, multiboardIndex - 1, 1)
-        call MultiboardSetItemValue(mbItem, "0")
         call MultiboardSetItemStyle(mbItem, true, false)
         call MultiboardSetItemWidth(mbItem, 3./100)
         call MultiboardReleaseItem(mbItem)
