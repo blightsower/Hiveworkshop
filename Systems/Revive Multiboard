@@ -1,0 +1,62 @@
+library ReviveMultiboard initializer OnInit
+    globals
+        private multiboard mb
+        private real multiboardDelay = 0.
+        private integer multiboardIndex = 0
+    endglobals
+
+    function addUnitToMultiboard takes string name returns nothing
+        local multiboarditem mbItem = null
+        set multiboardIndex = multiboardIndex + 1        
+        call MultiboardSetRowCount(mb, multiboardIndex)
+        set mbItem = MultiboardGetItem(mb, multiboardIndex - 1, 0)
+
+        call MultiboardSetItemValue(mbItem, name)
+        call MultiboardSetItemStyle(mbItem, true, false)
+        call MultiboardSetItemWidth(mbItem, 12./100)
+        call MultiboardReleaseItem(mbItem)
+        set mbItem = null
+
+        set mbItem = MultiboardGetItem(mb, multiboardIndex - 1, 1)
+        call MultiboardSetItemValue(mbItem, "0")
+        call MultiboardSetItemStyle(mbItem, true, false)
+        call MultiboardSetItemWidth(mbItem, 3./100)
+        call MultiboardReleaseItem(mbItem)
+        set mbItem = null
+        call MultiboardDisplay(mb, true)
+    endfunction
+
+    function updateBoard takes integer index, string name, real timeLeft returns nothing
+        local multiboarditem mbItem 
+        set mbItem = MultiboardGetItem(mb, index - 1, 1)
+        call MultiboardSetItemValue(mbItem, R2S(timeLeft))
+        call MultiboardReleaseItem(mbItem)
+        set mbItem = null
+
+        set mbItem = MultiboardGetItem(mb, index - 1, 0)
+        call MultiboardSetItemValue(mbItem, name)
+        call MultiboardReleaseItem(mbItem)
+        set mbItem = null
+    endfunction
+
+    function removeUnitFromMultiboard takes nothing returns nothing
+        set multiboardIndex = multiboardIndex - 1
+        call MultiboardSetRowCount(mb, multiboardIndex)
+        if multiboardIndex == 0 then
+            call MultiboardDisplay(mb, false)
+        endif
+    endfunction
+
+    private function onCreateMultiboard takes nothing returns nothing
+        set mb = CreateMultiboard()
+        call MultiboardSetTitleText(mb, "Revive Timer")
+        call MultiboardSetColumnCount(mb, 2)
+    endfunction
+
+    private function OnInit takes nothing returns nothing
+        local trigger t = CreateTrigger()
+        call TriggerRegisterTimerEventSingle(t, multiboardDelay)
+        call TriggerAddAction(t, function onCreateMultiboard)
+        set t = null
+    endfunction
+endlibrary
