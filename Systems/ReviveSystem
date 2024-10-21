@@ -1,4 +1,4 @@
-library ReviveSystem
+library Revive requires ReviveMultiboard
     globals
         private constant real TIMER_SPEED = 0.03
     endglobals
@@ -13,14 +13,13 @@ library ReviveSystem
     struct ReviveSystem
         implement ReviveSystemConfiguration
         implement SinglyLinkedList
-        implement Globals
 
         private static timer reviveTimer = CreateTimer()
-        private static integer index = 0
+        readonly static integer index = 0
         private unit revivingUnit
+        private string unitName
         private real reviveTimeLeft
         private player owner
-        private timerdialog timerWindow
 
         private static method getRandomX takes real x, real r returns real
             local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
@@ -41,10 +40,13 @@ library ReviveSystem
             call pop(this)
             call ReviveHero(.revivingUnit, .getRandomX(.X, .AOE), .getRandomY(.Y, .AOE), true)
             call PanCameraToTimedForPlayer(.owner, .X, .Y, 0.)
-            call DestroyTimerDialog(.timerWindow)
+
             set .owner = null
             set .revivingUnit = null
             set index = index - 1
+
+            call removeUnitFromMultiboard()
+
             if index == 0 then
                 call PauseTimer(reviveTimer)
             endif
@@ -52,13 +54,16 @@ library ReviveSystem
 
         private static method onCountdown takes nothing returns nothing
             local thistype this = thistype(0).next
+            local integer i = 1
             loop 
                 exitwhen this == 0
                 if .reviveTimeLeft > 0 then
                     set .reviveTimeLeft = .reviveTimeLeft - TIMER_SPEED
+                    call updateBoard(i, .unitName, .reviveTimeLeft)
                 else                     
                     call .onRevive() 
                 endif
+                set i = i + 1
                 set this = this.next
             endloop
         endmethod
@@ -72,11 +77,9 @@ library ReviveSystem
                 set .revivingUnit = u
                 set .reviveTimeLeft = BASE_REVIVE_TIME
                 set .owner = GetTriggerPlayer()
-                set .timerWindow = CreateTimerDialog(.reviveTimer)
-                call TimerDialogSetTitle(.timerWindow, GetUnitName(.revivingUnit))
-                call TimerDialogDisplay(.timerWindow, true)
-                call TimerDialogSetRealTimeRemaining(.timerWindow, .reviveTimeLeft)
+                set .unitName = GetUnitName(.revivingUnit)
                 set index = index + 1
+                call addUnitToMultiboard(.unitName)
                 if index == 1 then
                     call TimerStart(reviveTimer, TIMER_SPEED, true, function thistype.onCountdown)
                 endif
