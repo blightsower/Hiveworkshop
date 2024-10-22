@@ -1,0 +1,13 @@
+library RegionSpread
+    function getRandomX takes real x, real r returns real
+        local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+        local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+        return x + randomRadius * Cos(angle)
+    endfunction
+
+    function getRandomY takes real y, real r returns real
+        local real randomRadius = r * SquareRoot(GetRandomReal(0, 1))
+        local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+        return y + randomRadius * Sin(angle)
+    endfunction
+endlibrary
