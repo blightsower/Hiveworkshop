@@ -1,0 +1,57 @@
+library HeroSelection initializer OnInit
+    globals
+        private constant real SELECTION_X = 236.
+        private constant real SELECTION_Y = -244.
+        private constant real SPAWN_X = -2090.
+        private constant real SPAWN_Y = -2600.
+        private constant real SELECTOR_DELAY = 0.
+        private constant real SELECTOR_RADIUS = 500
+        private constant integer UNIT_SWITCHER = 'S000'
+        private constant integer SELECTOR_TYPE = 'h000'
+        private fogmodifier array fogMod 
+    endglobals
+
+    private function createSelector takes nothing returns nothing
+        local integer i = 0
+        local player p
+        loop
+            exitwhen i > Globals.PLAYER_COUNT
+            set p = Player(i)
+            if GetPlayerSlotState(p) == PLAYER_SLOT_STATE_PLAYING and GetPlayerController(p) == MAP_CONTROL_USER then
+                set fogMod[i] = CreateFogModifierRadius(p, FOG_OF_WAR_VISIBLE, SELECTION_X, SELECTION_Y, SELECTOR_RADIUS, false, false)
+                call FogModifierStart(fogMod[i])
+                call UnitAddAbility(CreateUnit(p, SELECTOR_TYPE, SELECTION_X, SELECTION_Y, 0), UNIT_SWITCHER)
+            endif
+            set i = i + 1
+        endloop      
+    endfunction
+
+    private function onHeroSelect takes nothing returns nothing
+        local unit u = GetSoldUnit()
+        local player p = GetOwningPlayer(GetBuyingUnit())
+        if IsUnitType(GetSoldUnit(), UNIT_TYPE_HERO) == true then
+            call RemoveUnit( GetBuyingUnit() )
+            call FogModifierStop(fogMod[GetPlayerId(p)])
+            call SetPlayerMaxHeroesAllowed( 0, p )
+            call SetUnitX(u, SPAWN_X)
+            call SetUnitY(u, SPAWN_Y)
+            call PanCameraToTimedForPlayer(p, SPAWN_X, SPAWN_Y, 0.)
+            call SelectUnitForPlayerSingle(u, p)
+        endif
+        set u = null
+        set p = null
+    endfunction
+
+    private function OnInit takes nothing returns nothing
+        local trigger t = CreateTrigger()
+        call TriggerRegisterTimerEventSingle(t, SELECTOR_DELAY)
+        call TriggerAddAction(t, function createSelector)
+        set t = null
+
+        set t = CreateTrigger()
+        call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SELL )
+        call TriggerAddAction(t, function onHeroSelect)
+        set t = null
+
+    endfunction
+endlibrary
