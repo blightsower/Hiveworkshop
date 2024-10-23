@@ -1,0 +1,118 @@
+library AuraOfSilence initializer OnInit requires Auramancer, DummyCaster, Preload
+    //---------------------------------------------------------------
+    // Aura of Silence v1.0
+    // Author: Blightsower
+    //
+    // Description - Reduces the maximum mana of nearby enemy units. Additionally, grants
+    // a chance to silence afflicted enemy units whenever they attempt to cast a spell.
+    //
+    //---------------------------------------------------------------
+    // Requirements:
+    //  * Enable JassHelper
+    //
+    // How to enable JassHelper
+    //  * In the Trigger Editor window, look for the menu labeled JassHelper
+    //    and click Enable JassHelper
+    //-------------------------------------------------------------------------
+    // How to Import:
+    // 1. Copy and paste the objects from this map to your map
+    //  * There are a ton of objects within this map due to the nature of the spell
+    //    which affects both allies and enemies.
+    //  * The important objects that you need to import to have it work successfully
+    //    in your map are the following:
+    //     - Aura of Silence - (Hero Ability)
+    //     - Aura of Silence - (Silence)
+    //     - Aura of Silence - (Penalty)
+    //     - Buffs
+    //     - Mana Penalties
+    //     - Dummy Caster
+    // 2. Copy and paste the Aura of Silence Category into your map
+    // 3. Configure the spell so that everything points to the correct
+    //    variables. Additional information about the variables are
+    //    provided for clarity
+    //-------------------------------------------------------------------------
+    // Note:
+    // This spell includes some optional libraries to handle dummy casting and preloading. 
+    // You might want to get rid of those libraries if you already have a system
+    // that handles those functionalities or you just feel like writing your own. Should you choose to keep
+    // the libraries, there are a few things that you need to configure to fit your needs. Check the libraries
+    // individually to have the variables point to the correct objects.
+    //
+    // How to remove optional libraries:
+    // To remove DummyCaster:
+    //     Remove DummyCaster from the requires and delete whats inside the OnDummyCast function found
+    //     at the bottom of configurables. Delete DummyCaster script
+    // To remove Preload:
+    //     Remove Preload from the requires and delete whats inside the OnPreload function found
+    //     at the bottom of configurables. Delete Preload script
+    //
+    // It also includes one required library which is Auramancer. You also need a DummyCaster 
+    // to keep this spell working. The DummyCaster included in this map does not account
+    // for the owner of the dummy spell so refrain from adding damage to the dummy spell.
+    //-------------------------------------------------------------------------
+//---------------------------------------------------------------
+// CONFIGURABLES
+//---------------------------------------------------------------
+    globals
+        // must point to Aura of Silence - (Penalty)
+        private constant integer BONUS_ABILITY = 'A001'
+
+        // must point to Aura of Silence - (Silence)
+        private constant integer DUMMY_ABILITY_ID = 'A002'
+       
+        // this is the ID of Soul Burn
+        private constant integer DUMMY_ABILITY_ORDER = 852668
+
+        // Effects that will appear when an afflicted enemy unit casts a spell
+        private constant string SILENCE_EFFECT = "Abilities\\Spells\\Items\\AIil\\AIilTarget.mdl"
+        private constant string SILENCE_EFFECT_ATTACHMENT = "origin"
+    endglobals
+
+    // Chance of unit getting silenced
+    private function GetChance takes integer level returns real
+        return 40. + (10*level)
+    endfunction
+
+    // Dummy caster function
+    private function OnDummyCast takes unit u, integer l returns nothing
+        call OrderCaster(u, l, DUMMY_ABILITY_ID, DUMMY_ABILITY_ORDER)
+    endfunction
+
+    // Preload
+    private function OnPreload takes nothing returns nothing
+        // Temporary preload
+        call Initialize.preloadAbility(BONUS_ABILITY)
+        call Initialize.preloadAbility(DUMMY_ABILITY_ID)
+        call Initialize.preloadEffect(SILENCE_EFFECT)
+
+        // Auramancer set up
+        // 'B000', 'B001', 'B002' must point to the buffs
+        // also assign the correct levels for each buff
+        call Auramancer.register('B000', BONUS_ABILITY, 1)
+        call Auramancer.register('B001', BONUS_ABILITY, 2) 
+        call Auramancer.register('B002', BONUS_ABILITY, 3)
+    endfunction
+//---------------------------------------------------------------
+// END OF CONFIGURABLES
+//---------------------------------------------------------------
+    private function OnCast takes nothing returns nothing
+        local unit u = GetTriggerUnit()
+        local integer l = GetUnitAbilityLevel(u, BONUS_ABILITY)
+        if l > 0 then
+            if GetChance(l) >= GetRandomReal(0, 100.1) then
+                call DestroyEffect(AddSpecialEffectTarget(SILENCE_EFFECT, u, SILENCE_EFFECT_ATTACHMENT))
+                call OnDummyCast(u, l)
+            endif
+        endif
+        set u = null
+        
+    endfunction
+
+    private function OnInit takes nothing returns nothing
+        local trigger t = CreateTrigger()
+        call OnPreload()
+        call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SPELL_EFFECT)
+        call TriggerAddCondition(t, Condition(function OnCast))
+        set t = null
+    endfunction
+endlibrary
