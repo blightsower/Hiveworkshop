@@ -193,7 +193,7 @@ scope VengeanceStorm
     endmodule    
 
     native UnitAlive takes unit id returns boolean
-    module VengeanceSlashConfiguration	
+    module VengeanceSlashConfiguration    
 
         //-------------------------------------------------------------
         // SLASH_MODEL - model used to represent the slashes
@@ -338,7 +338,7 @@ scope VengeanceStorm
         
         // calculates the radius. A modified version of GetRectFromCircleBJ(Location, Radius)
         private static method getRadius takes real x, real y, real r returns rect
-	    return Rect(x - r, y - r, x + r, y + r)
+        return Rect(x - r, y - r, x + r, y + r)
         endmethod
 
         private static method destroyTrees takes nothing returns boolean
@@ -411,7 +411,8 @@ scope VengeanceStorm
         method setStartingPoint takes real x, real y returns nothing
             set .startingX = generateRandomX(x)
             set .startingY = generateRandomY(y)
-            set .startingZ = SLASH_HEIGHT 
+            call MoveLocation(.loc, .startingX, .startingY)
+            set .startingZ = SLASH_HEIGHT + GetLocationZ(loc)
         endmethod
         
         method lerp takes real a, real b returns real
@@ -584,7 +585,7 @@ scope VengeanceStorm
         implement VengeanceStormStages
         implement TreeDestruction
 
-	private static timer vengeanceTimer = CreateTimer()
+    private static timer vengeanceTimer = CreateTimer()
         private static integer index = 0
         private thistype next
         private thistype prev
@@ -755,5 +756,4 @@ scope VengeanceStorm
             set t = null
         endmethod
     endstruct
-
 endscope
