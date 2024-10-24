@@ -1,0 +1,91 @@
+library WaveSpawner
+    globals
+        private integer array spawnMinionUnitType
+        private integer array spawnMinionUnitCount
+
+        private integer array spawnLeutenantUnitType
+        private integer array spawnLeutenantUnitCount
+
+        private integer array spawnGeneralUnitType
+        private integer array spawnGeneralUnitCount
+
+        private integer currentWave = 0
+        private integer totalWaves = 10
+
+        private real spawnPoint1X 
+        private real spawnPoint1Y
+
+        private real spawnPoint2X 
+        private real spawnPoint2Y
+
+        private real spawnPoint3X 
+        private real spawnPoint3Y
+
+        private real destinationPoint1X
+        private real destinationPoint1Y
+
+        private real destinationPoint2X
+        private real destinationPoint2Y
+
+        private timer spawnTimer
+        private timerdialog timerWindow
+        private real spawnDelay = 0.
+        private real countdownDuration = 60.
+    endglobals
+
+    function registerMinionWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
+        set spawnMinionUnitType[waveIndex] = unitType
+        set spawnMinionUnitCount[waveIndex] = unitCount
+    endfunction
+    
+    function registerLeutenantWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
+        set spawnLeutenantUnitType[waveIndex] = unitType
+        set spawnLeutenantUnitCount[waveIndex] = unitCount
+    endfunction
+
+    function registerGeneralWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
+        set spawnGeneralUnitType[waveIndex] = unitType
+        set spawnGeneralUnitCount[waveIndex] = unitCount
+    endfunction
+    
+    struct Spawner extends array
+        private static method countdownFinished takes nothing returns nothing
+            call PauseTimer(spawnTimer)
+            call DestroyTimer(spawnTimer)
+            call DestroyTimerDialog(timerWindow)
+            set currentWave = currentWave + 1
+            if currentWave == 1 then
+                call thistype.startCountdown()
+            endif
+        endmethod
+
+        private static method startCountdown takes nothing returns nothing
+            set spawnTimer = CreateTimer()
+            call TimerStart(spawnTimer, countdownDuration, false, function thistype.countdownFinished)
+
+            set timerWindow = CreateTimerDialog(spawnTimer)
+            if currentWave == 0 then
+                call TimerDialogSetTitle(timerWindow, "Select a hero: ")
+            else
+                call TimerDialogSetTitle(timerWindow, "Wave " + I2S(currentWave) + " in: ")
+            endif
+            call TimerDialogDisplay(timerWindow, true)
+        endmethod
+
+        private static method onDeath takes nothing returns nothing
+
+        endmethod
+
+        private static method onInit takes nothing returns nothing
+            local trigger t = CreateTrigger()
+            call TriggerRegisterTimerEventSingle(t, spawnDelay)
+            call TriggerAddAction(t, function thistype.startCountdown)
+            set t = null
+
+            set t = CreateTrigger()
+            call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_DEATH)
+            call TriggerAddAction(t, function thistype.onDeath)
+            set t = null
+        endmethod
+    endstruct
+endlibrary
