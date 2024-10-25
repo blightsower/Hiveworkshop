@@ -1,6 +1,6 @@
 library Life initializer OnInit
     globals
-        private real teamLifeDelay = 0.
+        private constant real TEAM_LIFE_DELAY = 0.
         private integer remainingLife = 20
         private player owner = Player(0)
         private leaderboard teamLifeBoard
@@ -11,6 +11,11 @@ library Life initializer OnInit
         set remainingLife = remainingLife - r
         call LeaderboardSetItemValue(teamLifeBoard, 0, remainingLife)
         call LeaderboardSetSizeByItemCount(teamLifeBoard, 1)
+        if remainingLife <= 0 then
+            call CustomDefeatBJ( Player(0),"Defeat!")
+            call CustomDefeatBJ( Player(1),"Defeat!")
+            call CustomDefeatBJ( Player(2),"Defeat!")
+        endif
     endfunction
 
     private function showTeamLife takes nothing returns nothing
@@ -22,7 +27,7 @@ library Life initializer OnInit
 
     private function OnInit takes nothing returns nothing
         local trigger t = CreateTrigger()
-        call TriggerRegisterTimerEventSingle(t, teamLifeDelay)
+        call TriggerRegisterTimerEventSingle(t, TEAM_LIFE_DELAY)
         call TriggerAddAction(t, function showTeamLife)
         set t = null
     endfunction
