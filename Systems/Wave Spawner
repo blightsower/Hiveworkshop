@@ -1,62 +1,93 @@
 library WaveSpawner
     globals
+        private group enemyGroup = CreateGroup()
         private integer array spawnMinionUnitType
         private integer array spawnMinionUnitCount
-
         private integer array spawnLeutenantUnitType
         private integer array spawnLeutenantUnitCount
-
         private integer array spawnGeneralUnitType
         private integer array spawnGeneralUnitCount
-
         private integer currentWave = 0
         private integer totalWaves = 10
-
-        private real spawnPoint1X 
-        private real spawnPoint1Y
-
-        private real spawnPoint2X 
-        private real spawnPoint2Y
-
-        private real spawnPoint3X 
-        private real spawnPoint3Y
-
+        private real spawnPoint1X = -4601.6
+        private real spawnPoint1Y = -2544.8
+        private real spawnPoint2X = -0.6
+        private real spawnPoint2Y = 4610.3
+        private real spawnPoint3X = 4630.1
+        private real spawnPoint3Y = -2560.1
         private real destinationPoint1X
         private real destinationPoint1Y
-
         private real destinationPoint2X
         private real destinationPoint2Y
-
         private timer spawnTimer
         private timerdialog timerWindow
         private real spawnDelay = 0.
         private real countdownDuration = 60.
+        private real spawnAOE = 250.
     endglobals
 
-    function registerMinionWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
+    function RegisterMinionWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
         set spawnMinionUnitType[waveIndex] = unitType
         set spawnMinionUnitCount[waveIndex] = unitCount
     endfunction
     
-    function registerLeutenantWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
+    function RegisterLeutenantWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
         set spawnLeutenantUnitType[waveIndex] = unitType
         set spawnLeutenantUnitCount[waveIndex] = unitCount
     endfunction
 
-    function registerGeneralWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
+    function RegisterGeneralWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
         set spawnGeneralUnitType[waveIndex] = unitType
         set spawnGeneralUnitCount[waveIndex] = unitCount
     endfunction
     
+    function SpawnWave takes integer count, integer unitType, real x, real y returns nothing
+        local integer i = 1
+        loop
+            set x = getRandomX(x, spawnAOE)
+            set y = getRandomY(y, spawnAOE)
+            exitwhen i > count
+            call GroupAddUnit(enemyGroup, CreateUnit(Globals.ENEMY_PLAYER, unitType, x, y, 0))
+            set i = i + 1
+        endloop
+    endfunction
+
+    function SummonWave takes nothing returns nothing
+        local integer r = GetRandomInt(0, 2)
+
+        if r == 0 then
+            call SpawnWave(spawnMinionUnitCount[currentWave], spawnMinionUnitType[currentWave], spawnPoint1X, spawnPoint1Y)
+            call SpawnWave(spawnLeutenantUnitCount[currentWave], spawnLeutenantUnitType[currentWave], spawnPoint1X, spawnPoint1Y)
+            call SpawnWave(spawnGeneralUnitCount[currentWave], spawnGeneralUnitType[currentWave], spawnPoint1X, spawnPoint1Y)
+        elseif r == 1 then
+            call SpawnWave(spawnMinionUnitCount[currentWave], spawnMinionUnitType[currentWave], spawnPoint2X, spawnPoint2Y)
+            call SpawnWave(spawnLeutenantUnitCount[currentWave], spawnLeutenantUnitType[currentWave], spawnPoint2X, spawnPoint2Y)
+            call SpawnWave(spawnGeneralUnitCount[currentWave], spawnGeneralUnitType[currentWave], spawnPoint2X, spawnPoint2Y)
+        else
+            call SpawnWave(spawnMinionUnitCount[currentWave], spawnMinionUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
+            call SpawnWave(spawnLeutenantUnitCount[currentWave], spawnLeutenantUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
+            call SpawnWave(spawnGeneralUnitCount[currentWave], spawnGeneralUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
+        endif
+    endfunction
+
     struct Spawner extends array
+        
+        private static method onRegister takes nothing returns nothing
+            call RegisterMinionWave('hfoo', 3, 1)
+        endmethod
+
         private static method countdownFinished takes nothing returns nothing
             call PauseTimer(spawnTimer)
             call DestroyTimer(spawnTimer)
             call DestroyTimerDialog(timerWindow)
-            set currentWave = currentWave + 1
-            if currentWave == 1 then
+
+            if currentWave == 0 then
                 call thistype.startCountdown()
+            else
+                call SummonWave()
             endif
+            set currentWave = currentWave + 1
+            
         endmethod
 
         private static method startCountdown takes nothing returns nothing
@@ -73,11 +104,18 @@ library WaveSpawner
         endmethod
 
         private static method onDeath takes nothing returns nothing
-
+            local unit u = GetTriggerUnit()
+            if IsUnitInGroup(u, enemyGroup) then
+                call GroupRemoveUnit(enemyGroup, u)
+            endif
+            set u = null
         endmethod
 
         private static method onInit takes nothing returns nothing
             local trigger t = CreateTrigger()
+
+            call onRegister()
+
             call TriggerRegisterTimerEventSingle(t, spawnDelay)
             call TriggerAddAction(t, function thistype.startCountdown)
             set t = null
@@ -86,6 +124,8 @@ library WaveSpawner
             call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_DEATH)
             call TriggerAddAction(t, function thistype.onDeath)
             set t = null
+
+
         endmethod
     endstruct
 endlibrary
