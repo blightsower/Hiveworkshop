@@ -1,6 +1,8 @@
 library WaveSpawner
     globals
         private group enemyGroup = CreateGroup()
+        private group swap = CreateGroup()
+        private group temp
         private integer array spawnMinionUnitType
         private integer array spawnMinionUnitCount
         private integer array spawnLeutenantUnitType
@@ -9,17 +11,18 @@ library WaveSpawner
         private integer array spawnGeneralUnitCount
         private integer currentWave = 0
         private integer totalWaves = 10
+        private integer command = 851983
         private real spawnPoint1X = -4601.6
         private real spawnPoint1Y = -2544.8
         private real spawnPoint2X = -0.6
         private real spawnPoint2Y = 4610.3
         private real spawnPoint3X = 4630.1
         private real spawnPoint3Y = -2560.1
-        private real destinationPoint1X
-        private real destinationPoint1Y
-        private real destinationPoint2X
-        private real destinationPoint2Y
+        private real destinationPointX = -2.
+        private real destinationPointY = -2556.2
+        private real commandDelay = 8.
         private timer spawnTimer
+        private timer commandTimer = CreateTimer()
         private timerdialog timerWindow
         private real spawnDelay = 0.
         private real countdownDuration = 60.
@@ -68,10 +71,29 @@ library WaveSpawner
             call SpawnWave(spawnLeutenantUnitCount[currentWave], spawnLeutenantUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
             call SpawnWave(spawnGeneralUnitCount[currentWave], spawnGeneralUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
         endif
+
+        call TimerStart(commandTimer, commandDelay, true, function Spawner.commandUnits)
     endfunction
 
     struct Spawner extends array
         
+        static method commandUnits takes nothing returns nothing
+            local unit FoG
+
+            loop
+                set FoG=FirstOfGroup(enemyGroup)
+                exitwhen FoG==null
+
+                call IssuePointOrderById(FoG, command, destinationPointX, destinationPointY)
+
+                call GroupAddUnit(swap,FoG)
+                call GroupRemoveUnit(enemyGroup,FoG)
+            endloop
+            set temp=enemyGroup
+            set enemyGroup=swap
+            set swap=temp
+        endmethod
+
         private static method onRegister takes nothing returns nothing
             call RegisterMinionWave('hfoo', 3, 1)
         endmethod
@@ -107,6 +129,11 @@ library WaveSpawner
             local unit u = GetTriggerUnit()
             if IsUnitInGroup(u, enemyGroup) then
                 call GroupRemoveUnit(enemyGroup, u)
+                if CountUnitsInGroup(enemyGroup) == 0 then
+                    call PauseTimer(commandTimer)
+                    call DestroyTimer(commandTimer)
+                    call startCountdown()
+                endif
             endif
             set u = null
         endmethod
@@ -124,7 +151,6 @@ library WaveSpawner
             call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_DEATH)
             call TriggerAddAction(t, function thistype.onDeath)
             set t = null
-
 
         endmethod
     endstruct
