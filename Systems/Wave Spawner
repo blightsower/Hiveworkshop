@@ -18,7 +18,7 @@ library WaveSpawner
         private real spawnPoint2Y = 4610.3
         private real spawnPoint3X = 4630.1
         private real spawnPoint3Y = -2560.1
-        private real destinationPointX = -2.
+        private real destinationPointX = -2.3
         private real destinationPointY = -2556.2
         private real commandDelay = 8.
         private timer spawnTimer
@@ -27,6 +27,7 @@ library WaveSpawner
         private real spawnDelay = 0.
         private real countdownDuration = 60.
         private real spawnAOE = 250.
+        private real pingDuration = 3.
     endglobals
 
     function RegisterMinionWave takes integer unitType, integer unitCount, integer waveIndex returns nothing
@@ -59,17 +60,23 @@ library WaveSpawner
         local integer r = GetRandomInt(0, 2)
 
         if r == 0 then
+            call DisplayTextToForce( GetPlayersAll(), "Enemy forces detected from the west!!!")
             call SpawnWave(spawnMinionUnitCount[currentWave], spawnMinionUnitType[currentWave], spawnPoint1X, spawnPoint1Y)
             call SpawnWave(spawnLeutenantUnitCount[currentWave], spawnLeutenantUnitType[currentWave], spawnPoint1X, spawnPoint1Y)
             call SpawnWave(spawnGeneralUnitCount[currentWave], spawnGeneralUnitType[currentWave], spawnPoint1X, spawnPoint1Y)
+            call PingMinimap(spawnPoint1X, spawnPoint1Y, pingDuration)
         elseif r == 1 then
+            call DisplayTextToForce( GetPlayersAll(), "Enemy forces detected from the north!!!")
             call SpawnWave(spawnMinionUnitCount[currentWave], spawnMinionUnitType[currentWave], spawnPoint2X, spawnPoint2Y)
             call SpawnWave(spawnLeutenantUnitCount[currentWave], spawnLeutenantUnitType[currentWave], spawnPoint2X, spawnPoint2Y)
             call SpawnWave(spawnGeneralUnitCount[currentWave], spawnGeneralUnitType[currentWave], spawnPoint2X, spawnPoint2Y)
+            call PingMinimap(spawnPoint2X, spawnPoint2Y, pingDuration)
         else
+            call DisplayTextToForce( GetPlayersAll(), "Enemy forces detected from the east!!!")
             call SpawnWave(spawnMinionUnitCount[currentWave], spawnMinionUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
             call SpawnWave(spawnLeutenantUnitCount[currentWave], spawnLeutenantUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
             call SpawnWave(spawnGeneralUnitCount[currentWave], spawnGeneralUnitType[currentWave], spawnPoint3X, spawnPoint3Y)
+            call PingMinimap(spawnPoint3X, spawnPoint3Y, pingDuration)
         endif
 
         call TimerStart(commandTimer, commandDelay, true, function Spawner.commandUnits)
@@ -77,6 +84,15 @@ library WaveSpawner
 
     struct Spawner extends array
         
+        private static method removeUnit takes unit u returns nothing
+            call GroupRemoveUnit(enemyGroup, u)
+            if CountUnitsInGroup(enemyGroup) == 0 then
+                call PauseTimer(commandTimer)
+                call DestroyTimer(commandTimer)
+                call startCountdown()
+            endif
+        endmethod
+
         static method commandUnits takes nothing returns nothing
             local unit FoG
 
@@ -95,7 +111,10 @@ library WaveSpawner
         endmethod
 
         private static method onRegister takes nothing returns nothing
+            // Wave 1
             call RegisterMinionWave('hfoo', 3, 1)
+            call RegisterLeutenantWave('nhea', 1, 1)
+            call RegisterGeneralWave('hspt', 1, 1)
         endmethod
 
         private static method countdownFinished takes nothing returns nothing
@@ -128,12 +147,17 @@ library WaveSpawner
         private static method onDeath takes nothing returns nothing
             local unit u = GetTriggerUnit()
             if IsUnitInGroup(u, enemyGroup) then
-                call GroupRemoveUnit(enemyGroup, u)
-                if CountUnitsInGroup(enemyGroup) == 0 then
-                    call PauseTimer(commandTimer)
-                    call DestroyTimer(commandTimer)
-                    call startCountdown()
-                endif
+                call removeUnit(u)
+            endif
+            set u = null
+        endmethod
+
+        private static method onUnitEnter takes nothing returns nothing
+            local unit u = GetTriggerUnit()
+            if IsUnitInGroup(u, enemyGroup) then
+                call removeUnit(u)
+                call RemoveUnit(u)
+                call reduceLife(1)
             endif
             set u = null
         endmethod
@@ -152,6 +176,10 @@ library WaveSpawner
             call TriggerAddAction(t, function thistype.onDeath)
             set t = null
 
+            set t = CreateTrigger()
+            call TriggerRegisterEnterRectSimple(t, gg_rct_Destination)
+            call TriggerAddAction(t, function thistype.onUnitEnter)
+            set t = null
         endmethod
     endstruct
 endlibrary
