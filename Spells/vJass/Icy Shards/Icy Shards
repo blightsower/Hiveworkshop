@@ -1,0 +1,433 @@
+library IcyShards requires optional DummyCaster, TreeDestruction, Preload
+
+    //---------------------------------------------------------------
+    // Icy Shards v1.0
+    // Author: Blightsower
+    //
+    // Description - Causes jagged icy shards to burst from the ground in random 
+    // locations along the target direction. Enemies caught by the shards take damage 
+    // and become frozen.
+    //---------------------------------------------------------------
+    // Requirements:
+    //  * Enable JassHelper
+    //
+    // How to enable JassHelper
+    //  * In the Trigger Editor window, look for the menu labeled JassHelper
+    //    and click Enable JassHelper
+    //-------------------------------------------------------------------------
+    // How to Import:
+    // 1. Copy and paste the objects from this map to your map namely:
+    //    * Icy Shards
+    //    * Icy Shards - (Freeze)
+    //    * DummyCaster
+    // 2. Also export the imported models by opening the Asset Manager (F12)
+    //    * Import the dummy.mdx to your map
+    //    * Import the Ice Shard.mdx to your map
+    // 3. Copy and paste the Icy Shards Category into your map
+    // 4. Configure the spell so that everything points to the correct
+    //    variables. Additional information about the variables are
+    //    provided for clarity.
+    //-------------------------------------------------------------------------
+    // Note:
+    // This spell includes some optional libraries to handle tree destruction, dummy casting
+    // and preloading. The spell is arranged so that you can easily get rid of those libraries without
+    // going into the code. You might want to get rid of those libraries if you already have a system
+    // that handles those functionalities or you just feel like writing your own. Should you choose to keep
+    // the libraries, there are a few things that you need to configure to fit your needs. Check the libraries
+    // individually to have the variables point to the correct objects.
+    //
+    // How to remove optional libraries:
+    // To remove DummyCaster:
+    //     Remove DummyCaster from the requires and delete whats inside the onDummyCast function found
+    //     at the bottom of configurables. Delete DummyCaster script
+    // To remove TreeDestruction:
+    //     Remove TreeDestrcution from the requires and delete whats inside the onDestroyTree
+    //     function found at the bottom of configurables. Delete TreeDestruction script
+    // To remove Preload:
+    //     Remove Preload from the requires and delete whats inside the onPreload function found
+    //     at the bottom of configurables. Delete Preload script
+    //-------------------------------------------------------------------------
+    // Credits:
+    // Vexorian - dummy.mdx
+    // Vinz - Ice Shard.mdx
+    //-------------------------------------------------------------------------
+
+    //-------------------------------------------------------------------------
+    // CONFIGURABLES
+    //-------------------------------------------------------------------------
+    globals
+        private constant real TIMER_SPEED = 0.03
+    endglobals
+    native UnitAlive takes unit id returns boolean
+    private module IcyShardsConfiguration
+        readonly static constant integer ABILITY_ID = 'A000'
+
+        //-------------------------------------------------------------
+        // DAMAGE
+        // Hint:
+        // 1.0 = 100% of the attribute
+        //-------------------------------------------------------------
+        readonly static attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
+        readonly static damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
+        readonly static weapontype WEAPON_TYPE = null
+        static constant method GET_ABSOLUTE_DAMAGE takes integer level returns real
+            return 65. + (10*level)
+        endmethod
+        static constant method GET_STRENGTH_DAMAGE takes integer level returns real
+            return 0.
+        endmethod
+        static constant method GET_AGILITY_DAMAGE takes integer level returns real
+            return 0.
+        endmethod
+        static constant method GET_INTELLIGENCE_DAMAGE takes integer level returns real
+            return 1.
+        endmethod        
+        static constant method GET_DAMAGE_AOE takes integer level returns real
+            return 150.
+        endmethod
+
+        //-------------------------------------------------------------
+        // BEHAVIOR
+        //-------------------------------------------------------------
+ 
+        // Shard model and its behaviors
+        readonly static constant string SHARD_MODEL = "war3mapImported\\Ice Shard.mdl"
+
+        // Shard model pitch angle
+        readonly static constant real SHARD_PITCH_ANGLE = 400. * bj_DEGTORAD
+
+        // Shard model duration before it disappears
+        readonly static constant real SHARD_DURATION = 2.
+        static constant method GET_SHARD_MODEL_SIZE takes integer level returns real
+            return 1.
+        endmethod
+
+        // The duration before the shard reaches maximum distance
+        static constant method GET_SHARD_MOVEMENT_SPEED_DURATION takes integer level returns real
+            return 1.
+        endmethod
+
+        // Model used when the shard spawns
+        readonly static constant string BIRTH_MODEL = "Abilities\\Spells\\Other\\FrostBolt\\FrostBoltMissile.mdl"
+        static constant method GET_BIRTH_MODEL_SIZE takes integer level returns real
+            return 1.75
+        endmethod
+
+        // Max distance of the spell
+        static constant method GET_MAX_DISTANCE takes integer level returns real
+            return 700.
+        endmethod
+
+        // Determines the girth of the spell
+        static constant method GET_SPREAD_AOE takes integer level returns real
+            return 150.
+        endmethod
+
+        // HIT MODEL
+        readonly static constant string HIT_MODEL = "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" 
+        readonly static constant string HIT_ATTACHMENT = "origin"
+        static constant method GET_HIT_MODEL_SIZE takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // API
+        //-------------------------------------------------------------
+        //-------------------------------------------------------------
+        // onDamage - is the damage event of the spell.
+        // unit caster - is the caster of the spell
+        // unit target - is the enemy about to get damaged by the spell
+        // real damage - is the amount of damage about to be dealt
+        // attacktype attackType - attacktype of the spell
+        // damagetype damageType - damagetype of the spell
+        // weapontype weaponType - weapontype of the spell
+        //-------------------------------------------------------------
+        static method onDamage takes unit caster, unit target, real damage, attacktype attackType, damagetype damageType, weapontype weaponType returns nothing
+            call UnitDamageTarget(caster, target, damage, true, false, attackType, damageType, weaponType)
+        endmethod
+
+        //-------------------------------------------------------------
+        // isShardable - is the damage filter of the spell.
+        // unit u - is the unit in question
+        // player p - is the owner of the spell
+        // Original Conditions:
+        //  - u is alive
+        //  - u is not a structure
+        //  - u is not magic immune
+        //  - u is is an enemy of player p
+        //-------------------------------------------------------------
+        static method isShardable takes unit u, player p returns boolean
+            return UnitAlive(u) and not(IsUnitType(u, UNIT_TYPE_STRUCTURE)) and not(IsUnitType(u, UNIT_TYPE_MAGIC_IMMUNE)) and IsUnitEnemy(u,p)
+        endmethod
+        
+        //-------------------------------------------------------------
+        // onDestroyTree - function called by the spell when destroying trees
+        // (x, y) - landing point of the arrows
+        // aoe - radius of the destruction
+        // uses the ClearTrees function from the optional library
+        //-------------------------------------------------------------
+        readonly static constant boolean DESTROYS_TREES = true
+        static method onDestroyTree takes real x, real y, real aoe returns nothing
+            call ClearTrees(x, y, aoe)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onDummyCast - is the ministun event of the spell
+        // unit u - target of the ministun
+        // integer l - level of the ministun
+        // uses the OrderCaster function from the optional library
+        //-------------------------------------------------------------
+        readonly static constant boolean USES_DUMMY_CASTER = true
+        readonly static constant integer DUMMY_ABILITY_ID = 'A001'    // must point to Arrow Shower (Ministun)
+        readonly static constant integer DUMMY_ABILITY_ORDER = 852095 // storm bolt
+        static method onDummyCast takes unit u, integer l returns nothing
+            call OrderCaster(u, l, DUMMY_ABILITY_ID, DUMMY_ABILITY_ORDER)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onPreload - runs at map initialization
+        // uses the preload function from the optional library
+        //-------------------------------------------------------------
+        static method onPreload takes nothing returns nothing
+            call Initialize.preloadAbility(ABILITY_ID)
+            call Initialize.preloadAbility(DUMMY_ABILITY_ID)
+            call Initialize.preloadEffect(SHARD_MODEL)
+            call Initialize.preloadEffect(BIRTH_MODEL)
+            call Initialize.preloadEffect(HIT_MODEL)
+        endmethod
+    endmodule
+    //-------------------------------------------------------------------------
+    // END OF CONFIGURABLES
+    //-------------------------------------------------------------------------  
+
+    private module SinglyLinkedList
+        thistype next
+        thistype prev
+        static method insertAtHead takes thistype this returns nothing
+            set this.next = 0
+            set this.prev = thistype(0).prev
+            set thistype(0).prev.next = this
+            set thistype(0).prev = this
+        endmethod
+        static method pop takes thistype this returns nothing
+            set this.next.prev = this.prev
+            set this.prev.next = this.next
+        endmethod
+    endmodule
+
+    scope Shards
+        struct Shard
+            implement SinglyLinkedList
+
+            private static timer shardsTimer = CreateTimer()
+            private static integer index = 0
+
+            private effect shardEffect
+            private real duration 
+
+            private method clean takes nothing returns nothing
+                call this.deallocate()
+                call pop(this)
+
+                call DestroyEffect(.shardEffect)
+
+                set index = index - 1
+                if index == 0 then
+                    call PauseTimer(shardsTimer)
+                endif
+            endmethod
+
+            private static method onCountdown takes nothing returns nothing
+                local thistype this = thistype(0).next
+                
+                loop
+                    exitwhen this == 0
+                        if .duration > 0 then
+                            set .duration = .duration - TIMER_SPEED
+                        else
+                            call clean()
+                        endif
+                    set this = this.next
+                endloop
+            endmethod
+
+            static method createShard takes real x, real y, real duration, real z, IcyShards instance returns nothing
+                local thistype this = thistype.allocate()
+                local effect birthEffect
+
+                call insertAtHead(this)
+                set .duration = duration
+                set .shardEffect = AddSpecialEffect(IcyShards.SHARD_MODEL, x, y)
+
+                call BlzSetSpecialEffectZ(.shardEffect, z)
+                call BlzSetSpecialEffectScale(.shardEffect, IcyShards.GET_SHARD_MODEL_SIZE(instance.level))
+                call BlzSetSpecialEffectYaw(.shardEffect, instance.angle)
+                call BlzSetSpecialEffectPitch(.shardEffect, IcyShards.SHARD_PITCH_ANGLE)
+
+                set birthEffect = AddSpecialEffect(IcyShards.BIRTH_MODEL, x, y)
+                call BlzSetSpecialEffectZ(birthEffect, z)
+                call BlzSetSpecialEffectScale(birthEffect, IcyShards.GET_BIRTH_MODEL_SIZE(instance.level))
+                call DestroyEffect(birthEffect)
+
+                set index = index + 1
+                if index == 1 then
+                    call TimerStart(shardsTimer, TIMER_SPEED, true, function thistype.onCountdown)
+                endif
+            endmethod
+
+        endstruct
+    endscope
+
+    scope IcyShards
+        struct IcyShards
+            implement IcyShardsConfiguration
+            implement SinglyLinkedList
+
+            private group damagedGroup = CreateGroup()
+            private static group damageGroup = CreateGroup()
+            private static timer shardTimer = CreateTimer()
+            private static location loc = Location(0,0)  
+            private static integer index = 0
+
+            private real x
+            private real y
+            private real t=0
+            private real speed
+            private real damage
+            private unit caster
+            private real velocityX
+            private real velocityY
+            private player owner
+            readonly integer level
+            readonly real angle
+
+            private static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
+                local real damage_agi = I2R(GetHeroStatBJ(bj_HEROSTAT_AGI, u, true)) * a
+                local real damage_str = I2R(GetHeroStatBJ(bj_HEROSTAT_STR, u, true)) * s
+                local real damage_int = I2R(GetHeroStatBJ(bj_HEROSTAT_INT, u, true)) * i
+                return damage_agi + damage_str + damage_int
+            endmethod
+
+            private method dealDamage takes real whereX, real whereY, real distanceR returns nothing
+                local unit u
+                local effect e
+
+                if DESTROYS_TREES then
+                    call onDestroyTree(whereX, whereY, distanceR)
+                endif
+
+                call GroupEnumUnitsInRange(damageGroup, whereX, whereY, distanceR, null)
+                loop
+                    set u = FirstOfGroup(damageGroup)
+                    exitwhen u == null
+
+                    if .isShardable(u, .owner) and not(IsUnitInGroup(u, .damagedGroup)) then
+                        set e = AddSpecialEffectTarget(HIT_MODEL, u, HIT_ATTACHMENT)
+                        call BlzSetSpecialEffectScale(e, GET_HIT_MODEL_SIZE(.level))
+                        call DestroyEffect(e)
+
+                        call .onDamage(caster, u, .damage, .ATTACK_TYPE, .DAMAGE_TYPE, .WEAPON_TYPE)
+                        call GroupAddUnit(damagedGroup, u)
+  
+                        if USES_DUMMY_CASTER then
+                            call onDummyCast(u, .level)
+                        endif
+
+                    endif
+                    call GroupRemoveUnit(damageGroup,u)
+                endloop
+            endmethod
+            
+            private method createShard takes real whereX, real whereY, real distanceR returns nothing
+                local real randomRadius = distanceR * SquareRoot(GetRandomReal(0, 1))
+                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+                local real randomX = whereX + randomRadius * Cos(angle)
+                local real randomY = whereY + randomRadius * Sin(angle)
+                local real z
+
+                call MoveLocation(thistype.loc, randomX, randomY)
+                set z = GetLocationZ(thistype.loc)
+                call Shard.createShard(randomX, randomY, IcyShards.SHARD_DURATION, z, this)
+            endmethod
+
+            private method clean takes nothing returns nothing
+                call this.deallocate()
+                call pop(this)
+                set .caster = null
+                set .owner = null
+                call DestroyGroup(.damagedGroup)
+                set index = index - 1
+                if index == 0 then
+                    call PauseTimer(shardTimer)
+                endif
+            endmethod
+
+            private method update takes nothing returns boolean
+                set .x = .x + .velocityX
+                set .y = .y + .velocityY
+                set .t = .t + .speed
+                call createShard(.x, .y, GET_SPREAD_AOE(.level))
+                call dealDamage(.x, .y, GET_DAMAGE_AOE(.level))
+                return .t > GET_MAX_DISTANCE(.level)
+            endmethod
+
+            private static method onEffect takes nothing returns nothing
+                local thistype this = thistype(0).next
+
+                loop
+                    exitwhen this == 0
+                        if update() then
+                            call clean()
+                        endif
+                    set this = this.next
+                endloop
+            endmethod
+
+            private static method onCast takes nothing returns nothing
+                local thistype this
+                local real spellX
+                local real spellY
+                local real directionX 
+                local real directionY
+                local real duration
+
+                if GetSpellAbilityId() == ABILITY_ID then
+                    set this = thistype.allocate()
+                    call insertAtHead(this)
+
+                    set .caster = GetTriggerUnit()
+                    set .owner = GetTriggerPlayer()
+                    set .level = GetUnitAbilityLevel(caster, ABILITY_ID)
+                    set .x = GetUnitX(.caster)
+                    set .y = GetUnitY(.caster)
+                    set spellX = GetSpellTargetX()
+                    set spellY = GetSpellTargetY()
+
+                    set .angle = Atan2(spellY  - .y, spellX  - .x)
+                    set directionX = Cos(.angle)
+                    set directionY = Sin(.angle)
+
+                    set duration = GET_SHARD_MOVEMENT_SPEED_DURATION(.level)
+                    set .speed = GET_MAX_DISTANCE(.level)/(duration/TIMER_SPEED)
+                    set .velocityX = directionX * .speed
+                    set .velocityY = directionY * .speed
+
+                    set .damage = GET_ABSOLUTE_DAMAGE(.level) + getDamageFromAttribute(.caster, GET_STRENGTH_DAMAGE(.level), GET_AGILITY_DAMAGE(.level), GET_INTELLIGENCE_DAMAGE(.level))
+
+                    set index = index + 1
+                    if index == 1 then
+                        call TimerStart(shardTimer, TIMER_SPEED, true, function thistype.onEffect)
+                    endif
+                endif
+            endmethod
+
+            static method onInit takes nothing returns nothing
+                local trigger t = CreateTrigger()
+                call onPreload()
+                call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SPELL_EFFECT)
+                call TriggerAddAction(t, function thistype.onCast)
+                set t = null
+            endmethod
+        endstruct
+    endscope
+endlibrary
