@@ -1,0 +1,11 @@
+library AnthemOfTheDamned initializer Init requires Auramancer
+    // Auramancer Set up
+    function Init takes nothing returns nothing
+        // 'B000~2' points to Anthem of the Damned buff
+        // 'A001' points to Anthem of the Damned Spell Book
+        // 1~3 pertains to the levels of which the bonuses are added
+        call Auramancer.register('B000', 'A001', 1)
+        call Auramancer.register('B001', 'A001', 2)
+        call Auramancer.register('B002', 'A001', 3)
+    endfunction
+endlibrary
