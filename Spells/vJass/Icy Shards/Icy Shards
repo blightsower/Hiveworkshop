@@ -1,11 +1,11 @@
 library IcyShards requires optional DummyCaster, TreeDestruction, Preload
 
     //---------------------------------------------------------------
-    // Icy Shards v1.0
+    // Icy Shards v1.1
     // Author: Blightsower
     //
-    // Description - Causes jagged icy shards to burst from the ground in random 
-    // locations along the target direction. Enemies caught by the shards take damage 
+    // Description - Causes jagged icy shards to burst from the ground in random
+    // locations along the target direction. Enemies caught by the shards take damage
     // and become frozen.
     //---------------------------------------------------------------
     // Requirements:
@@ -60,29 +60,29 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
     endglobals
     native UnitAlive takes unit id returns boolean
     private module IcyShardsConfiguration
-        readonly static constant integer ABILITY_ID = 'A000'
+        static constant integer ABILITY_ID = 'A000'
 
         //-------------------------------------------------------------
         // DAMAGE
         // Hint:
         // 1.0 = 100% of the attribute
         //-------------------------------------------------------------
-        readonly static attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
-        readonly static damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
-        readonly static weapontype WEAPON_TYPE = null
-        static constant method GET_ABSOLUTE_DAMAGE takes integer level returns real
+        static constant attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
+        static constant damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
+        static constant weapontype WEAPON_TYPE = null
+        static method GET_ABSOLUTE_DAMAGE takes integer level returns real
             return 65. + (10*level)
         endmethod
-        static constant method GET_STRENGTH_DAMAGE takes integer level returns real
+        static method GET_STRENGTH_DAMAGE takes integer level returns real
             return 0.
         endmethod
-        static constant method GET_AGILITY_DAMAGE takes integer level returns real
+        static method GET_AGILITY_DAMAGE takes integer level returns real
             return 0.
         endmethod
-        static constant method GET_INTELLIGENCE_DAMAGE takes integer level returns real
+        static method GET_INTELLIGENCE_DAMAGE takes integer level returns real
             return 1.
-        endmethod        
-        static constant method GET_DAMAGE_AOE takes integer level returns real
+        endmethod      
+        static method GET_DAMAGE_AOE takes integer level returns real
             return 150.
         endmethod
 
@@ -91,43 +91,54 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
         //-------------------------------------------------------------
  
         // Shard model and its behaviors
-        readonly static constant string SHARD_MODEL = "war3mapImported\\Ice Shard.mdl"
+        static constant string SHARD_MODEL = "war3mapImported\\Ice Shard.mdl"
 
         // Shard model pitch angle
-        readonly static constant real SHARD_PITCH_ANGLE = 400. * bj_DEGTORAD
+        static constant real SHARD_PITCH_ANGLE = 400. * bj_DEGTORAD
 
         // Shard model duration before it disappears
-        readonly static constant real SHARD_DURATION = 2.
-        static constant method GET_SHARD_MODEL_SIZE takes integer level returns real
+        static constant real SHARD_DURATION = 2.
+        static method GET_SHARD_MODEL_SIZE takes integer level returns real
             return 1.
         endmethod
 
         // The duration before the shard reaches maximum distance
-        static constant method GET_SHARD_MOVEMENT_SPEED_DURATION takes integer level returns real
+        static method GET_SHARD_MOVEMENT_SPEED_DURATION takes integer level returns real
             return 1.
         endmethod
 
         // Model used when the shard spawns
-        readonly static constant string BIRTH_MODEL = "Abilities\\Spells\\Other\\FrostBolt\\FrostBoltMissile.mdl"
-        static constant method GET_BIRTH_MODEL_SIZE takes integer level returns real
+        static constant string BIRTH_MODEL = "Abilities\\Spells\\Other\\FrostBolt\\FrostBoltMissile.mdl"
+        static method GET_BIRTH_MODEL_SIZE takes integer level returns real
             return 1.75
         endmethod
 
         // Max distance of the spell
-        static constant method GET_MAX_DISTANCE takes integer level returns real
+        static method GET_MAX_DISTANCE takes integer level returns real
             return 700.
         endmethod
 
         // Determines the girth of the spell
-        static constant method GET_SPREAD_AOE takes integer level returns real
-            return 150.
+        static method GET_SPREAD_AOE takes integer level returns real
+            return 100.
         endmethod
 
         // HIT MODEL
-        readonly static constant string HIT_MODEL = "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" 
-        readonly static constant string HIT_ATTACHMENT = "origin"
-        static constant method GET_HIT_MODEL_SIZE takes integer level returns real
+        static constant string HIT_MODEL = "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl"
+        static constant string HIT_ATTACHMENT = "origin"
+        static method GET_HIT_MODEL_SIZE takes integer level returns real
             return 1.
+        endmethod
+
+        // How far will the shards appear in front of the caster
+        static method GET_SHARD_CAST_OFFSET takes integer level returns real
+            return 75.
+        endmethod
+
+        // How often shards are created by the spell
+        // Note: The minimum value returned by this function should not be less than the TIMER_SPEED
+        static method GET_SHARD_SPAWN_INTERVAL takes integer level returns real
+            return 0.03
         endmethod
 
         //-------------------------------------------------------------
@@ -159,14 +170,14 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
         static method isShardable takes unit u, player p returns boolean
             return UnitAlive(u) and not(IsUnitType(u, UNIT_TYPE_STRUCTURE)) and not(IsUnitType(u, UNIT_TYPE_MAGIC_IMMUNE)) and IsUnitEnemy(u,p)
         endmethod
-        
+      
         //-------------------------------------------------------------
         // onDestroyTree - function called by the spell when destroying trees
-        // (x, y) - landing point of the arrows
+        // (x, y) - spawn point of the shard
         // aoe - radius of the destruction
         // uses the ClearTrees function from the optional library
         //-------------------------------------------------------------
-        readonly static constant boolean DESTROYS_TREES = true
+        static constant boolean DESTROYS_TREES = true
         static method onDestroyTree takes real x, real y, real aoe returns nothing
             call ClearTrees(x, y, aoe)
         endmethod
@@ -177,9 +188,9 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
         // integer l - level of the ministun
         // uses the OrderCaster function from the optional library
         //-------------------------------------------------------------
-        readonly static constant boolean USES_DUMMY_CASTER = true
-        readonly static constant integer DUMMY_ABILITY_ID = 'A001'    // must point to Arrow Shower (Ministun)
-        readonly static constant integer DUMMY_ABILITY_ORDER = 852095 // storm bolt
+        static constant boolean USES_DUMMY_CASTER = true
+        static constant integer DUMMY_ABILITY_ID = 'A001'    // must point to Icy Shards - (Freeze)
+        static constant integer DUMMY_ABILITY_ORDER = 852095 // storm bolt
         static method onDummyCast takes unit u, integer l returns nothing
             call OrderCaster(u, l, DUMMY_ABILITY_ID, DUMMY_ABILITY_ORDER)
         endmethod
@@ -198,7 +209,7 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
     endmodule
     //-------------------------------------------------------------------------
     // END OF CONFIGURABLES
-    //-------------------------------------------------------------------------  
+    //-------------------------------------------------------------------------
 
     private module SinglyLinkedList
         thistype next
@@ -223,7 +234,7 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
             private static integer index = 0
 
             private effect shardEffect
-            private real duration 
+            private real duration
 
             private method clean takes nothing returns nothing
                 call this.deallocate()
@@ -239,7 +250,7 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
 
             private static method onCountdown takes nothing returns nothing
                 local thistype this = thistype(0).next
-                
+              
                 loop
                     exitwhen this == 0
                         if .duration > 0 then
@@ -286,7 +297,7 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
             private group damagedGroup = CreateGroup()
             private static group damageGroup = CreateGroup()
             private static timer shardTimer = CreateTimer()
-            private static location loc = Location(0,0)  
+            private static location loc = Location(0,0)
             private static integer index = 0
 
             private real x
@@ -297,6 +308,7 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
             private unit caster
             private real velocityX
             private real velocityY
+            private real shardSpawnTimeLeft
             private player owner
             readonly integer level
             readonly real angle
@@ -328,7 +340,7 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
 
                         call .onDamage(caster, u, .damage, .ATTACK_TYPE, .DAMAGE_TYPE, .WEAPON_TYPE)
                         call GroupAddUnit(damagedGroup, u)
-  
+ 
                         if USES_DUMMY_CASTER then
                             call onDummyCast(u, .level)
                         endif
@@ -337,10 +349,10 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
                     call GroupRemoveUnit(damageGroup,u)
                 endloop
             endmethod
-            
+          
             private method createShard takes real whereX, real whereY, real distanceR returns nothing
                 local real randomRadius = distanceR * SquareRoot(GetRandomReal(0, 1))
-                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD 
+                local real angle = GetRandomDirectionDeg() * bj_DEGTORAD
                 local real randomX = whereX + randomRadius * Cos(angle)
                 local real randomY = whereY + randomRadius * Sin(angle)
                 local real z
@@ -366,8 +378,15 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
                 set .x = .x + .velocityX
                 set .y = .y + .velocityY
                 set .t = .t + .speed
-                call createShard(.x, .y, GET_SPREAD_AOE(.level))
-                call dealDamage(.x, .y, GET_DAMAGE_AOE(.level))
+
+                set .shardSpawnTimeLeft = .shardSpawnTimeLeft - TIMER_SPEED
+
+                if .shardSpawnTimeLeft <= 0 then
+                    call createShard(.x, .y, GET_SPREAD_AOE(.level))
+                    call dealDamage(.x, .y, GET_DAMAGE_AOE(.level))
+                    set .shardSpawnTimeLeft = GET_SHARD_SPAWN_INTERVAL(.level)
+                endif
+
                 return .t > GET_MAX_DISTANCE(.level)
             endmethod
 
@@ -387,7 +406,7 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
                 local thistype this
                 local real spellX
                 local real spellY
-                local real directionX 
+                local real directionX
                 local real directionY
                 local real duration
 
@@ -411,6 +430,11 @@ library IcyShards requires optional DummyCaster, TreeDestruction, Preload
                     set .speed = GET_MAX_DISTANCE(.level)/(duration/TIMER_SPEED)
                     set .velocityX = directionX * .speed
                     set .velocityY = directionY * .speed
+
+                    set .x = .x + directionX * GET_SHARD_CAST_OFFSET(.level)
+                    set .y = .y + directionY * GET_SHARD_CAST_OFFSET(.level)
+
+                    set .shardSpawnTimeLeft = GET_SHARD_SPAWN_INTERVAL(.level)
 
                     set .damage = GET_ABSOLUTE_DAMAGE(.level) + getDamageFromAttribute(.caster, GET_STRENGTH_DAMAGE(.level), GET_AGILITY_DAMAGE(.level), GET_INTELLIGENCE_DAMAGE(.level))
 
