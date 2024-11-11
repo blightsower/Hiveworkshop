@@ -1,0 +1,29 @@
+library DummyCaster initializer OnInit
+    //---------------------------------------------------
+    // Make sure that CASTER_TYPE correctly points to the DummyCaster's Id
+    // press ctrl + d to show the id in the object editor
+    //---------------------------------------------------
+    globals
+        private integer CASTER_TYPE = 'h001'
+
+        // do not touch
+        private unit dummyCaster
+        private player neutralPlayer = Player(PLAYER_NEUTRAL_PASSIVE)
+    endglobals
+    private function LoadCaster takes nothing returns nothing
+        set dummyCaster = CreateUnit(neutralPlayer, CASTER_TYPE, 0, 0, 0)
+    endfunction
+    function OrderCaster takes unit u, integer level, integer a, integer o, player p returns nothing
+        call SetUnitOwner(dummyCaster, p, false )
+        call SetUnitX(dummyCaster, GetUnitX(u))
+        call SetUnitY(dummyCaster, GetUnitY(u))
+        call UnitAddAbility(dummyCaster, a)
+        call SetUnitAbilityLevel(dummyCaster, a, level)
+        call IssueTargetOrderById(dummyCaster,o,u)
+        call UnitRemoveAbility(dummyCaster, a)
+        call SetUnitOwner(dummyCaster, neutralPlayer, false )
+    endfunction
+    private function OnInit takes nothing returns nothing
+        call LoadCaster()
+    endfunction
+endlibrary
