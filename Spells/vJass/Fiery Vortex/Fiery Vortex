@@ -1,0 +1,670 @@
+library FieryVortex requires optional DummyCaster, TreeDestruction, Preload
+
+    //---------------------------------------------------------------
+    // Fiery Vortex v1.0
+    // Author: Blightsower
+    //
+    // Description - Channels a vortex of flames at the target location, dealing 
+    // damage and applying a short stun and burn effect to enemies. While channeling, 
+    // the caster gains a shield that increases armor. If fully channeled, the vortex explodes, 
+    // dealing massive damage, applying a stronger burn and a longer stun to all affected enemies.
+    //---------------------------------------------------------------
+    // Requirements:
+    //  * Enable JassHelper
+    //
+    // How to enable JassHelper
+    //  * In the Trigger Editor window, look for the menu labeled JassHelper
+    //    and click Enable JassHelper
+    //-------------------------------------------------------------------------
+    // How to Import:
+    // Advanced apology, this spell contains a lot of objects
+    // 1. Copy and paste the objects from this map to your map namely:
+    //    * Fiery Vortex - (Hero)
+    //    * Fiery Vortex - (Disabled)
+    //    * Fiery Vortex - (Swap)
+    //    * Fiery Vortex - (Bonuses)
+    //    * Fiery Vortex - (Minor Stun)
+    //    * Fiery Vortex - (Final Stun)
+    //    * Fiery Vortex - (Minor Burn)
+    //    * Fiery Vortex - (Final Burn)
+    //    * Fiery Vortex - (Debuff)
+    //    * DummyCaster
+    // 2. Also export the imported models by opening the Asset Manager (F12)
+    //    * Import the dummy.mdx to your map
+    //    * Import the EmberGlow6.blp to your map
+    //    * Import the Ice Shard.mdx to your map
+    // 3. Copy and paste the Fiery Vortex Category into your map
+    // 4. Configure the spell so that everything points to the correct
+    //    variables. Additional information about the variables are
+    //    provided for clarity.
+    //-------------------------------------------------------------------------
+    // Note:
+    // This spell includes some optional libraries to handle tree destruction, dummy casting
+    // and preloading. The spell is arranged so that you can easily get rid of those libraries without
+    // going into the code. You might want to get rid of those libraries if you already have a system
+    // that handles those functionalities or you just feel like writing your own. Should you choose to keep
+    // the libraries, there are a few things that you need to configure to fit your needs. Check the libraries
+    // individually to have the variables point to the correct objects.
+    //
+    // How to remove optional libraries:
+    // To remove DummyCaster:
+    //     Remove DummyCaster from the requires and delete whats inside the onDummyCast function found
+    //     at the bottom of configurables. Delete DummyCaster script
+    // To remove TreeDestruction:
+    //     Remove TreeDestrcution from the requires and delete whats inside the onDestroyTree
+    //     function found at the bottom of configurables. Delete TreeDestruction script
+    // To remove Preload:
+    //     Remove Preload from the requires and delete whats inside the onPreload function found
+    //     at the bottom of configurables. Delete Preload script
+    //-------------------------------------------------------------------------
+    // Credits:
+    // Vexorian - dummy.mdx
+    // Vinz - Flamestrike II.mdx
+    //      - EmberGlow6.blp
+    //-------------------------------------------------------------------------
+
+    //-------------------------------------------------------------
+    // CONFIGURABLES
+    //-------------------------------------------------------------
+    globals
+        private constant real TIMER_SPEED = 0.03
+    endglobals
+
+    native UnitAlive takes unit id returns boolean
+
+    private module FieryVortexConfiguration
+        //-------------------------------------------------------------
+        // OBJECT EDITOR
+        //-------------------------------------------------------------
+        // Hint:
+        // Press ctrl + d to check the object ids. 
+        //-------------------------------------------------------------
+ 
+        // Must point to Fiery Vortex - (Hero)
+        static constant integer ABILITY_ID = 'A001'
+
+        // Order string of ABILITY_ID
+        static constant string ORDER_STRING = "monsoon"
+
+        // Must point to Fiery Vortex - (Swap)
+        static constant integer CAST_SAFETY = 'A000'
+
+        // Must point to Fiery Vortex - (Bonuses)
+        static constant integer BONUSES = 'A003'
+
+        //-------------------------------------------------------------
+        // DAMAGE
+        // Hint:
+        // 1.0 = 100% of the attribute
+        //-------------------------------------------------------------
+        static constant attacktype ATTACK_TYPE = ATTACK_TYPE_NORMAL
+        static constant damagetype DAMAGE_TYPE = DAMAGE_TYPE_NORMAL
+        static constant weapontype WEAPON_TYPE = null
+
+        // Damage area of effect
+        static method GET_DAMAGE_AOE takes integer level returns real
+            return 300.
+        endmethod
+
+        // Damage per interval
+        static method GET_ABSOLUTE_DAMAGE takes integer level returns real
+            return 15. + (10*level)
+        endmethod
+        static method GET_STRENGTH_DAMAGE takes integer level returns real
+            return 0.
+        endmethod
+        static method GET_AGILITY_DAMAGE takes integer level returns real
+            return 0.
+        endmethod
+        static method GET_INTELLIGENCE_DAMAGE takes integer level returns real
+            return 1.
+        endmethod      
+        
+        // Damage on final explosion
+        static method GET_FINAL_ABSOLUTE_DAMAGE takes integer level returns real
+            return 75. + 100.*level
+        endmethod
+        static method GET_FINAL_STRENGTH_DAMAGE takes integer level returns real
+            return 0.
+        endmethod
+        static method GET_FINAL_AGILITY_DAMAGE takes integer level returns real
+            return 0.
+        endmethod
+        static method GET_FINAL_INTELLIGENCE_DAMAGE takes integer level returns real
+            return 1.
+        endmethod  
+
+        //-------------------------------------------------------------
+        // BEHAVIOR
+        //-------------------------------------------------------------
+
+        // the full channel duration of the spell
+        static method GET_CHANNEL_TIME takes integer level returns real
+            return 3.5
+        endmethod
+
+        // How long will the flame swirl before the main explosion happens
+        static method GET_RANGE_INDICATOR_DURATION takes integer level returns real
+            return .75
+        endmethod
+
+        // Starting angle of the flame sparks
+        static constant real RANGE_INDICATOR_STARTING_ANGLE_DEGREES = 0.
+
+        // Damage interval
+        static method GET_DAMAGE_INTERVAL takes integer level returns real
+            return .5
+        endmethod
+
+        // Special effect interval
+        static method GET_SFX_INTERVAL takes integer level returns real
+            return .5
+        endmethod
+
+        //-------------------------------------------------------------
+        // VISUALS
+        //-------------------------------------------------------------
+
+        // The swirling flame model before the main explosion starts
+        static constant string RANGE_INDICATOR_SPARK_MODEL = "Abilities\\Weapons\\RedDragonBreath\\RedDragonMissile.mdl"
+
+        // The size of the swirling flames
+        static constant real RANGE_INDICATOR_SPARK_SIZE = 1.0
+
+        // How many swirling flames
+        static constant integer RANGE_INDICATOR_SPARK_COUNT = 3
+
+        // How many times the flames will swirl before the explosion starts.
+        // I find that it looks great at 540 degrees (one and a half rotation. 360 is a full circle)
+        static constant real RANGE_INDICATOR_SPARK_ORBIT = 540.
+
+        // The vortex model
+        static constant string MAIN_EXPLOSION = "war3mapImported\\Flamestrike II.mdx"
+
+        // The size of the vortex
+        static method GET_MAIN_EXPLOSION_SIZE takes integer level returns real
+            return 1.5
+        endmethod
+
+        // The model played when the caster fully completed the channel duration of the spell
+        static constant string FINAL_EXPLOSION = "Abilities\\Spells\\Other\\Doom\\DoomDeath.mdl"
+
+        // Size of the final explosion
+        static method GET_FINAL_EXPLOSION_SIZE takes integer level returns real
+            return 2.5
+        endmethod
+
+        // The model that lingers on the ground while the explosion is happening
+        static constant string GROUND_EFFECT = "Abilities\\Spells\\Items\\VampiricPotion\\VampPotionCaster.mdl"
+
+        // Size of the lingering ground model
+        static method GET_GROUND_EFFECT_SIZE takes integer level returns real
+            return 4.
+        endmethod
+
+        // The model attached to the caster when the explosion starts to occur
+        static constant string CASTER_MODEL = "Abilities\\Spells\\Items\\StaffOfSanctuary\\Staff_Sanctuary_Target.mdl"
+        static constant string CASTER_ATTACHMENT = "chest"
+        
+        // Size of the caster model
+        static method GET_CASTER_MODEL_SIZE takes integer level returns real
+            return 1.
+        endmethod
+
+        // Model shown when a unit is hit by the spell
+        readonly static constant string HIT_MODEL = "Abilities\\Spells\\Items\\AIfb\\AIfbSpecialArt.mdl"
+        readonly static constant string HIT_ATTACHMENT = "chest"
+        static constant method GET_HIT_MODEL_SIZE takes integer level returns real
+            return 1.
+        endmethod
+
+        //-------------------------------------------------------------
+        // API
+        //-------------------------------------------------------------
+
+        //-------------------------------------------------------------
+        // onDestroyTree - function called by the spell when destroying trees
+        // (x, y) - target point of fiery vortex
+        // aoe - radius of the destruction
+        // uses the ClearTrees function from the optional library
+        //-------------------------------------------------------------
+        static constant boolean DESTROYS_TREES = true
+        static method onDestroyTree takes real x, real y, real aoe returns nothing
+            call ClearTrees(x, y, aoe)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onDamage - is the damage event of the spell.
+        // unit caster - is the caster of the spell
+        // unit target - is the enemy about to get damaged by the spell
+        // real damage - is the amount of damage about to be dealt
+        // attacktype attackType - attacktype of the spell
+        // damagetype damageType - damagetype of the spell
+        // weapontype weaponType - weapontype of the spell
+        // isFinalDamage - true if the caster has fully channeled the spell
+        //-------------------------------------------------------------
+        static method onDamage takes unit caster, unit target, real damage, attacktype attackType, damagetype damageType, weapontype weaponType, boolean isFinalDamage returns nothing
+            call UnitDamageTarget(caster, target, damage, true, false, attackType, damageType, weaponType)
+        endmethod
+
+        //-------------------------------------------------------------
+        // isVortexable - is the damage filter of the spell.
+        // unit u - is the unit in question
+        // player p - is the owner of the spell
+        // Original Conditions:
+        //  - u is alive
+        //  - u is not a structure
+        //  - u is not magic immune
+        //  - u is is an enemy of player p
+        //-------------------------------------------------------------
+        static method isVortexable takes unit u, player p returns boolean
+            return UnitAlive(u) and not(IsUnitType(u, UNIT_TYPE_STRUCTURE)) and not(IsUnitType(u, UNIT_TYPE_MAGIC_IMMUNE)) and IsUnitEnemy(u,p)
+        endmethod
+
+        //-------------------------------------------------------------
+        // onDummyCast - is the ministun event of the spell
+        // unit u - target of the burn and stun
+        // integer l - level of the spell
+        // uses the OrderCaster function from the optional library
+        // isFinalBurn - true if the caster has fully channeled the spell
+        //-------------------------------------------------------------
+        static constant boolean USES_DUMMY_CASTER = true
+        static constant integer MINOR_STUN_ABILITY_ID = 'A004'    // must point to Fiery Vortex - (Minor Stun)
+        static constant integer MINOR_STUN_ABILITY_ORDER = 852095 // storm bolt
+        static constant integer FINAL_STUN_ABILITY_ID = 'A005'    // must point to Fiery Vortex - (Final Stun)
+        static constant integer FINAL_STUN_ABILITY_ORDER = 852095 // storm bolt
+        static constant integer MINOR_BURN_ABILITY_ID = 'A006'    // must point to Fiery Vortex - (Minor Burn)
+        static constant integer MINOR_BURN_ABILITY_ORDER = 852662 // acid bomb
+        static constant integer FINAL_BURN_ABILITY_ID = 'A007'    // must point to Fiery Vortex - (Final Burn)
+        static constant integer FINAL_BURN_ABILITY_ORDER = 852662 // acid bomb
+        static method onDummyCast takes unit u, integer l, boolean isFinalBurn, player owner returns nothing
+            if isFinalBurn then
+                call OrderCaster(u, l, FINAL_BURN_ABILITY_ID, FINAL_BURN_ABILITY_ORDER, owner)
+                call OrderCaster(u, l, FINAL_STUN_ABILITY_ID, FINAL_STUN_ABILITY_ORDER, owner)
+            else
+                call OrderCaster(u, l, MINOR_BURN_ABILITY_ID, MINOR_BURN_ABILITY_ORDER, owner)
+                call OrderCaster(u, l, MINOR_STUN_ABILITY_ID, MINOR_STUN_ABILITY_ORDER, owner)
+            endif
+        endmethod
+
+        //-------------------------------------------------------------
+        // onPreload - runs at map initialization
+        // uses the preload function from the optional library
+        //-------------------------------------------------------------
+        static method onPreload takes nothing returns nothing
+            call Initialize.preloadAbility(ABILITY_ID)
+            call Initialize.preloadAbility(CAST_SAFETY)
+            call Initialize.preloadAbility(BONUSES)
+            call Initialize.preloadAbility(MINOR_STUN_ABILITY_ID)
+            call Initialize.preloadAbility(FINAL_STUN_ABILITY_ID)
+            call Initialize.preloadAbility(MINOR_BURN_ABILITY_ID)
+            call Initialize.preloadAbility(FINAL_BURN_ABILITY_ID)
+
+            call Initialize.preloadEffect(RANGE_INDICATOR_SPARK_MODEL)
+            call Initialize.preloadEffect(MAIN_EXPLOSION)
+            call Initialize.preloadEffect(FINAL_EXPLOSION)
+            call Initialize.preloadEffect(GROUND_EFFECT)
+            call Initialize.preloadEffect(CASTER_MODEL)
+            call Initialize.preloadEffect(HIT_MODEL)
+        endmethod
+
+    endmodule
+    //-------------------------------------------------------------
+    // END CONFIGURABLES
+    //-------------------------------------------------------------
+
+    private module SinglyLinkedList
+        thistype next
+        thistype prev
+
+        static method insertAtHead takes thistype this returns nothing
+            set this.next = 0
+            set this.prev = thistype(0).prev
+            set thistype(0).prev.next = this
+            set thistype(0).prev = this
+        endmethod
+
+        static method pop takes thistype this returns nothing
+            set this.next.prev = this.prev
+            set this.prev.next = this.next
+        endmethod
+    endmodule
+
+    scope FieryRangeIndicator
+        struct FieryRangeIndicator
+            implement SinglyLinkedList
+
+            private static timer rangeTimer = CreateTimer()
+            private static integer index = 0
+
+            private unit caster
+            private effect spark
+            private real x
+            private real y
+            private real centerX
+            private real centerY
+            private real radius
+            private real orbitSpeed
+            private real currentAngle
+            private real t = 0
+            private real duration
+
+            private method lerp takes real a, real b, real t returns real
+                return a + (b - a) * t
+            endmethod
+
+            private method update takes nothing returns boolean
+                local real z
+                local real r
+
+                set .currentAngle = .currentAngle + .orbitSpeed
+
+                set r = lerp(.radius, 0, .t)
+
+                set .x = .centerX + r * Cos(.currentAngle)
+                set .y = .centerY + r * Sin(.currentAngle)
+                call MoveLocation(FieryVortex.loc, .x, .y)
+                set z = GetLocationZ(FieryVortex.loc)
+
+                call BlzSetSpecialEffectPosition(.spark, .x, .y, z)
+
+                set .t = .t + 1/(.duration/TIMER_SPEED)
+
+                return .t > 1.
+            endmethod
+
+            private method onCleanUp takes nothing returns nothing
+                call this.deallocate()
+                call pop(this)
+
+                call DestroyEffect(.spark)
+                set .caster = null
+
+                set index = index - 1
+                if index == 0 then
+                    call PauseTimer(rangeTimer)
+                endif
+            endmethod
+
+
+            private static method onEffect takes nothing returns nothing
+                local thistype this = thistype(0).next
+ 
+                loop
+                    exitwhen this == 0
+
+                    if update() or GetUnitCurrentOrder(.caster) != String2OrderIdBJ(FieryVortex.ORDER_STRING) then
+                        call onCleanUp()
+                    endif 
+
+                    set this = this.next
+                endloop
+            endmethod
+ 
+            static method createRangeIndicator takes real centerX, real centerY, real radius, unit caster, real duration returns nothing
+                local thistype this
+                local integer i = 0
+                local real angleStep = FieryVortex.angleStep
+                local real orbitSpeed = ((FieryVortex.RANGE_INDICATOR_SPARK_ORBIT) / (duration + 0.01)) * bj_DEGTORAD
+
+                loop
+                    exitwhen i > FieryVortex.RANGE_INDICATOR_SPARK_COUNT
+
+                    set this = thistype.allocate()
+                    call insertAtHead(this)
+                    
+                    set .caster = caster
+                    set .centerX = centerX
+                    set .centerY = centerY
+
+                    set .orbitSpeed = orbitSpeed
+                    set .radius = radius
+                    set .duration = duration
+
+                    set .currentAngle = (FieryVortex.RANGE_INDICATOR_STARTING_ANGLE_DEGREES * bj_DEGTORAD) + (i * angleStep)
+                    set .x = .centerX + radius * Cos(.currentAngle)
+                    set .y = .centerY + radius * Sin(.currentAngle)
+
+                    set .spark = AddSpecialEffect(FieryVortex.RANGE_INDICATOR_SPARK_MODEL, .x, .y)
+
+                    call BlzSetSpecialEffectScale(.spark, FieryVortex.RANGE_INDICATOR_SPARK_SIZE)
+
+                    set index = index + 1
+                    if index == 1 then                   
+                        call TimerStart(rangeTimer, TIMER_SPEED, true, function thistype.onEffect)
+                    endif
+
+                    set i = i + 1
+                endloop
+            endmethod
+        endstruct
+    endscope
+
+    scope FieryVortex
+        struct FieryVortex
+            implement FieryVortexConfiguration
+            implement SinglyLinkedList
+
+            // statics
+            static location loc = Location(0,0)
+            static real angleStep = (360. / FieryVortex.RANGE_INDICATOR_SPARK_COUNT) * bj_DEGTORAD
+            private static group damageGroup = CreateGroup()
+            private static timer vortexTimer = CreateTimer()
+            private static integer index = 0
+            
+            // caster data
+            private unit caster
+            private real targetX
+            private real targetY
+            private real targetZ
+            private player owner
+            private integer level
+            private real aoe
+
+            // timing
+            private real damagePerInterval
+            private real damageFinalExplosion
+            private real waitTimeLeft
+            private real damageTimeLeft
+            private real channelTimeLeft
+            private real specialEffectTimeLeft
+            
+            // effects
+            private effect groundEffect
+            private effect casterEffect
+
+            // flags
+            private boolean isCompleted
+            private boolean isWaiting
+
+            // damage
+            private static method getDamageFromAttribute takes unit u, real s, real a, real i returns real
+                local real damage_agi = I2R(GetHeroStatBJ(bj_HEROSTAT_AGI, u, true)) * a
+                local real damage_str = I2R(GetHeroStatBJ(bj_HEROSTAT_STR, u, true)) * s
+                local real damage_int = I2R(GetHeroStatBJ(bj_HEROSTAT_INT, u, true)) * i
+                return damage_agi + damage_str + damage_int
+            endmethod
+
+            private method dealDamage takes real whereX, real whereY, real distanceR, real damage, boolean isFinalDamage returns nothing
+                local unit u
+                local effect e
+
+                call GroupEnumUnitsInRange(damageGroup, whereX, whereY, distanceR, null)
+                loop
+                    set u = FirstOfGroup(damageGroup)
+                    exitwhen u == null
+
+                    if .isVortexable(u, .owner) then
+                        set e = AddSpecialEffectTarget(HIT_MODEL, u, HIT_ATTACHMENT)
+                        call BlzSetSpecialEffectScale(e, GET_HIT_MODEL_SIZE(.level))
+                        call DestroyEffect(e)
+
+                        call .onDamage(.caster, u, damage, .ATTACK_TYPE, .DAMAGE_TYPE, .WEAPON_TYPE, isFinalDamage)
+
+                        if USES_DUMMY_CASTER then
+                            call onDummyCast(u, .level, isFinalDamage, .owner)
+                        endif
+
+                    endif
+                    call GroupRemoveUnit(damageGroup,u)
+                endloop
+            endmethod
+
+            private method clean takes nothing returns nothing
+                call this.deallocate()
+                call pop(this)
+
+                call UnitRemoveAbility(.caster, CAST_SAFETY)
+                call UnitRemoveAbility(.caster, BONUSES)
+                call DestroyEffect(.groundEffect)
+                call DestroyEffect(.casterEffect)
+                set .caster = null
+                set .owner = null
+
+                set index = index - 1
+                if index == 0 then
+                    call PauseTimer(vortexTimer)
+                endif
+            endmethod
+
+            private method update takes nothing returns boolean
+                local effect e
+  
+                if .isWaiting then
+                    if .waitTimeLeft > 0. then
+                        set .waitTimeLeft = .waitTimeLeft - TIMER_SPEED
+                    else
+                        set .groundEffect = AddSpecialEffect(GROUND_EFFECT, .targetX, .targetY)
+                        call BlzSetSpecialEffectScale(.groundEffect, GET_GROUND_EFFECT_SIZE(.level))
+
+                        set .casterEffect = AddSpecialEffectTarget(CASTER_MODEL, .caster, CASTER_ATTACHMENT)
+                        call BlzSetSpecialEffectScale(.casterEffect, GET_CASTER_MODEL_SIZE(.level))
+
+                        call UnitAddAbility(.caster, BONUSES)
+                        call SetUnitAbilityLevel(.caster, BONUSES, .level)
+
+                        if DESTROYS_TREES then
+                            call onDestroyTree(.targetX, .targetY, .aoe)
+                        endif
+
+                        set .isWaiting = false
+                    endif
+                else
+                    if .damageTimeLeft > 0 then
+                        set .damageTimeLeft = .damageTimeLeft - TIMER_SPEED
+                    else
+                        set .damageTimeLeft = GET_DAMAGE_INTERVAL(.level)
+
+                        call dealDamage(.targetX, .targetY, GET_DAMAGE_AOE(.level), .damagePerInterval, false)
+                    endif
+
+                    if specialEffectTimeLeft > 0 then
+                        set .specialEffectTimeLeft = .specialEffectTimeLeft - TIMER_SPEED
+                    else                        
+                        set e = AddSpecialEffect(MAIN_EXPLOSION, .targetX, .targetY)
+                        call BlzSetSpecialEffectScale(e, GET_MAIN_EXPLOSION_SIZE(.level))
+                        call BlzSetSpecialEffectPosition(e, .targetX, .targetY, .targetZ)
+                        call DestroyEffect(e)
+
+                        set .specialEffectTimeLeft = GET_SFX_INTERVAL(.level)
+                    endif
+
+                    if .channelTimeLeft > 0 then
+                        set .channelTimeLeft = .channelTimeLeft - TIMER_SPEED
+                    else
+                        set .isCompleted = true
+                        call IssueImmediateOrder(.caster, "stop")
+                    endif
+                endif              
+                    
+                return isCompleted
+            endmethod
+
+            private static method onEffect takes nothing returns nothing
+                local thistype this = thistype(0).next
+                local effect e
+
+                loop
+                    exitwhen this == 0
+                        if update() or GetUnitCurrentOrder(.caster) != String2OrderIdBJ(FieryVortex.ORDER_STRING) then
+                            
+                            if .isCompleted then
+                                set e = AddSpecialEffect(FINAL_EXPLOSION, .targetX, .targetY)
+                                call BlzSetSpecialEffectScale(e, GET_FINAL_EXPLOSION_SIZE(.level))
+                                call BlzSetSpecialEffectPosition(e, .targetX, .targetY, .targetZ)
+                                call DestroyEffect(e)
+
+                                call dealDamage(.targetX, .targetY, GET_DAMAGE_AOE(.level), .damageFinalExplosion, true)
+                            endif
+
+                            call clean()
+                        endif
+                    set this = this.next
+                endloop
+            endmethod
+
+            private static method onCast takes nothing returns nothing
+                local thistype this
+
+                if GetSpellAbilityId() == ABILITY_ID then
+                    set this = thistype.allocate()
+                    call insertAtHead(this)
+
+                    set .caster = GetTriggerUnit()
+                    set .owner = GetTriggerPlayer()
+                    set .level = GetUnitAbilityLevel(caster, ABILITY_ID)
+
+                    set .targetX = GetSpellTargetX()
+                    set .targetY = GetSpellTargetY()
+                    call MoveLocation(.loc, .targetX, .targetY)
+                    set .targetZ = GetLocationZ(FieryVortex.loc)
+
+                    set .damagePerInterval = GET_ABSOLUTE_DAMAGE(.level) + getDamageFromAttribute(.caster, GET_STRENGTH_DAMAGE(.level), GET_AGILITY_DAMAGE(.level), GET_INTELLIGENCE_DAMAGE(.level))
+                    set .damageFinalExplosion = GET_FINAL_ABSOLUTE_DAMAGE(.level) + getDamageFromAttribute(.caster, GET_FINAL_STRENGTH_DAMAGE(.level), GET_FINAL_AGILITY_DAMAGE(.level), GET_FINAL_INTELLIGENCE_DAMAGE(.level))
+
+                    set .aoe = GET_DAMAGE_AOE(.level)
+                    set .channelTimeLeft = GET_CHANNEL_TIME(.level)
+
+                    set .damageTimeLeft = 0.
+                    set .specialEffectTimeLeft = 0.
+                    set .waitTimeLeft = GET_RANGE_INDICATOR_DURATION(.level)
+
+                    set .isCompleted = false
+                    set .isWaiting = true
+
+                    call UnitAddAbility(.caster, CAST_SAFETY)
+
+                    call FieryRangeIndicator.createRangeIndicator(.targetX, .targetY, .aoe, .caster, .waitTimeLeft)
+
+                    set index = index + 1
+                    if index == 1 then
+                        call TimerStart(vortexTimer, TIMER_SPEED, true, function thistype.onEffect)
+                    endif
+                endif
+            endmethod
+
+            private static method disableAbility takes nothing returns nothing
+                local integer i = 0
+                loop
+                    call SetPlayerAbilityAvailableBJ(false, CAST_SAFETY, Player(i))
+                    call SetPlayerAbilityAvailableBJ(false, BONUSES, Player(i))
+
+                    set i = i + 1
+                    exitwhen i == bj_MAX_PLAYER_SLOTS
+                endloop
+            endmethod
+
+            static method onInit takes nothing returns nothing
+                local trigger t = CreateTrigger()
+
+                call onPreload()
+                call disableAbility()
+
+                call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_SPELL_EFFECT)
+                call TriggerAddAction(t, function thistype.onCast)
+
+                set t = null
+            endmethod
+        endstruct
+    endscope
+endlibrary
