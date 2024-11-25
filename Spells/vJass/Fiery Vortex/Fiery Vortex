@@ -1,7 +1,7 @@
-library FieryVortex requires optional DummyCaster, TreeDestruction, Preload
+library FieryVortex requires optional DummyCaster, optional TreeDestruction, optional Preload
 
     //---------------------------------------------------------------
-    // Fiery Vortex v1.0
+    // Fiery Vortex v1.1
     // Author: Blightsower
     //
     // Description - Channels a vortex of flames at the target location, dealing 
@@ -349,7 +349,7 @@ library FieryVortex requires optional DummyCaster, TreeDestruction, Preload
             private real t = 0
             private real duration
 
-            private method lerp takes real a, real b, real t returns real
+            private static method lerp takes real a, real b, real t returns real
                 return a + (b - a) * t
             endmethod
 
